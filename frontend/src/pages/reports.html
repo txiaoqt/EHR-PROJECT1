@@ -1,0 +1,48 @@
+<!-- reports.html — simple reports UI + export demo -->
+<section class="card" style="padding:16px">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+    <div style="font-size:18px;font-weight:700">Reports & Analytics</div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <label style="color:var(--muted);font-size:13px">From</label>
+      <input id="r-from" type="date">
+      <label style="color:var(--muted);font-size:13px">To</label>
+      <input id="r-to" type="date">
+      <select id="r-type">
+        <option value="census">Census</option>
+        <option value="diagnoses">Top Diagnoses</option>
+        <option value="visits">Visit Trends</option>
+      </select>
+      <button class="btn" id="runReport">Run</button>
+      <button class="btn" id="exportCsv" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.03)">Export CSV</button>
+    </div>
+  </div>
+
+  <div id="report-output" class="card">
+    <h3 style="margin-top:0">Report Preview</h3>
+    <div id="report-preview" style="min-height:180px;color:var(--muted);">No report run yet.</div>
+  </div>
+</section>
+
+<script>
+  document.getElementById('runReport').addEventListener('click', ()=> {
+    const from = document.getElementById('r-from').value;
+    const to = document.getElementById('r-to').value;
+    const type = document.getElementById('r-type').value;
+    const preview = document.getElementById('report-preview');
+
+    // In real app: call API to fetch report data. Demo placeholder:
+    preview.innerHTML = `<div style="padding:12px">Report: <strong>${type}</strong><br/>Range: ${from || '—'} → ${to || '—'}<br/><div style="margin-top:12px;color:var(--muted)">[Table / chart preview would render here]</div></div>`;
+  });
+
+  document.getElementById('exportCsv').addEventListener('click', ()=>{
+    // demo CSV generation
+    const csv = "name,encounters\nJuan Dela Cruz,3\nMaria Santos,2\n";
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'report.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+</script>

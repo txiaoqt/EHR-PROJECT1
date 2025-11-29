@@ -1,0 +1,39 @@
+<section class="page">
+  <div style="max-width:420px;margin:40px auto">
+    <div class="card">
+      <h2>Sign in</h2>
+      <p style="color:var(--muted)">Welcome back — sign in to continue.</p>
+
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+        <input id="login-email" class="input" type="text" placeholder="Your name or email" />
+        <input id="login-pass" class="input" type="password" placeholder="Password" />
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="loginBtn" class="btn">Sign in</button>
+          <button id="gotoSignup" class="btn secondary">Create account</button>
+        </div>
+        <div id="login-msg" style="color:var(--danger);display:none"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // demo auth - check against stored users
+  document.getElementById('loginBtn').addEventListener('click', ()=>{
+    const id = document.getElementById('login-email').value.trim();
+    const pw = document.getElementById('login-pass').value;
+    const users = JSON.parse(localStorage.getItem('ehr_users') || '[]');
+    const user = users.find(u => (u.email === id || u.name === id) && u.password === pw);
+    if(user){
+      // store current user (no password)
+      localStorage.setItem('ehr_user', JSON.stringify({ name: user.name, avatar: user.avatar }));
+      window.dispatchEvent(new CustomEvent('app:navigate', { detail: { page: 'dashboard' } }));
+    } else {
+      const msg = document.getElementById('login-msg'); msg.textContent = 'Invalid credentials (demo)'; msg.style.display = 'block';
+    }
+  });
+
+  document.getElementById('gotoSignup').addEventListener('click', ()=>{
+    window.dispatchEvent(new CustomEvent('app:navigate', { detail: { page: 'signup' } }));
+  });
+</script>

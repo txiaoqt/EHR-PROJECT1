@@ -1,0 +1,209 @@
+/* components.css - Buttons, Sidebar, Cards, Forms, Tables */
+
+/* base card */
+.card {
+  background: linear-gradient(180deg, rgba(0,0,0,0.02), rgba(255,255,255,0.00));
+  padding: 16px;
+  border-radius: 12px;
+  color: var(--text);
+  box-shadow: 0 6px 18px rgba(12,12,14,0.06);
+}
+
+/* buttons */
+.btn {
+  display:inline-flex; align-items:center; gap:8px;
+  background: linear-gradient(90deg, var(--accent), var(--danger));
+  color: white; border: none; padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight:600;
+}
+.btn.secondary {
+  background: transparent; color: var(--muted); border: 1px solid rgba(0,0,0,0.06);
+}
+.btn.small { padding:6px 10px; font-size:13px; }
+
+/* inputs */
+.input, input[type="text"], input[type="search"], input[type="date"], textarea, select {
+  padding:10px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:transparent; color:var(--text);
+}
+.input::placeholder, input::placeholder, textarea::placeholder { color: var(--muted); }
+
+/* --- Search Inputs With PNG Icon --- */
+
+input[type="search"],
+.input.search,
+input.search {
+  background-image: url('../assets/icons/search.png');
+  background-repeat: no-repeat;
+  background-position: 12px center;
+  background-size: 16px;
+
+  padding-left: 40px !important; /* space for the icon */
+}
+
+/* Logo container (keeps existing .logo style) */
+.logo { display:flex; align-items:center; justify-content:center; }
+
+/* Image inside the logo — keep it crisp and contained */
+.logo-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;   /* preserve aspect ratio */
+  border-radius: 8px;    /* soft corners — remove if you want square */
+  display: block;
+}
+
+/* Brand title (smaller) */
+.brand-title{
+  margin: 0;
+  font-size: 14px;      /* reduced from larger value */
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+
+/* brand subtitle */
+.brand-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* sidebar */
+.sidebar {
+  width: var(--sidebar-width);
+  background: linear-gradient(180deg, var(--panel), rgba(0,0,0,0.03));
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--muted);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  position: relative;
+
+  overflow-x: hidden;   /* ← ADD THIS */
+}
+
+
+/* header with profile on top-right */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand { display:flex; align-items:center; gap:12px; }
+.logo { width:44px; height:44px; border-radius:10px; background: linear-gradient(135deg, var(--accent-3), var(--accent)); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; }
+
+/* profile button (top-right) */
+.profile-btn { background:transparent; border:none; cursor:pointer; padding:2px; }
+.avatar { width:44px; height:44px; border-radius:10px; object-fit:cover; background:linear-gradient(135deg,var(--accent-3),var(--accent)); }
+/* PROFILE DROPDOWN — render inside sidebar flow so it doesn't overlap the main content */
+/* --- PROFILE MENU (floating inside sidebar, does NOT push dashboard) --- */
+
+/* ensure sidebar is the positioning context */
+.sidebar {
+  position: relative;
+  overflow: visible;
+}
+
+/* Profile dropdown — TOP RIGHT inside the sidebar */
+.profile-menu {
+  position: absolute;
+  top: 72px;           /* pull it near the top of the sidebar */
+  left: 185px;         /* align to the sidebar's right edge */
+  width: 220px;
+  background: var(--panel);
+
+  /* 🔥 Transparent / frosted dropdown */
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(11,18,32,0.16);
+  padding: 6px 0;
+  z-index: 80;
+
+  transform-origin: top left;
+  transition: transform 160ms cubic-bezier(.2,.9,.3,1), opacity 160ms ease;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* hidden state: fade+slide up and disable pointer events */
+.profile-menu.hidden {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.99);
+  pointer-events: none;
+}
+
+/* menu items */
+.profile-menu-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--muted);
+  display: block;
+  white-space: nowrap;
+}
+.profile-menu-item:hover {
+  background: rgba(0,0,0,0.04);
+  color: var(--text);
+}
+.profile-menu-item.danger { color: var(--danger); }
+
+/* small accessibility/focus cue */
+.profile-btn:focus { outline: 2px solid rgba(140,21,21,0.12); outline-offset: 2px; border-radius: 8px; }
+
+/* responsive: ensure dropdown stays visible on small screens */
+@media (max-width: 980px) {
+  .profile-menu {
+    left: 20px;
+    top: 20px;
+    width: 200px;
+  }
+}
+
+/* nav */
+.menu {
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-top:6px;
+  overflow-y: auto;
+  overflow-x: hidden;   /* ← prevent scrollbar */
+}
+
+.menu-item { padding:10px; border-radius:10px; cursor:pointer; color:var(--muted); display:flex; align-items:center; gap:10px; }
+.menu-item:hover { background: rgba(0,0,0,0.03); color:var(--text); transform: translateX(3px); transition: all .12s ease; }
+.menu-item.active { background: linear-gradient(90deg, rgba(140,21,21,0.12), rgba(239,68,68,0.04)); color:var(--text); }
+
+/* footer area in sidebar */
+.sidebar-footer { margin-top:auto; font-size:13px; color:var(--muted); display:flex; flex-direction:column; gap:8px; }
+.footer-actions { display:flex; gap:8px; }
+
+/* topbar */
+.topbar { height:var(--topbar-height); display:flex; align-items:center; gap:12px; justify-content:space-between; }
+
+/* grid helpers */
+.grid-2col { display:grid; grid-template-columns: 1fr 360px; gap:16px; align-items:start; }
+.grid-kpis { display:flex; gap:12px; }
+.grid-charts { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+/* table */
+.table { width:100%; border-collapse:collapse; }
+.table th, .table td { padding:10px 8px; text-align:left; border-bottom:1px solid rgba(0,0,0,0.04); color:var(--muted); }
+.table tr:hover td { background: rgba(0,0,0,0.02); color:var(--text); }
+
+/* tabs */
+.tabs { display:flex; gap:8px; margin-bottom:12px; }
+.tab { background:transparent; border:none; padding:8px 10px; border-radius:8px; cursor:pointer; color:var(--muted); }
+.tab.active { background: rgba(0,0,0,0.02); color:var(--text); }
+
+/* small responsive */
+@media (max-width:980px){
+  .sidebar { width:100%; padding:12px; display:flex; flex-direction:row; align-items:center; gap:10px; }
+  .menu { display:none; }
+  .profile-menu { right:8px; top:56px; }
+  .grid-2col { grid-template-columns: 1fr; }
+}
+

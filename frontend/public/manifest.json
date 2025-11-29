@@ -1,0 +1,15 @@
+{
+  "name": "EHR Prototype",
+  "short_name": "EHR",
+  "start_url": "/frontend/public/index.html",
+  "display": "standalone",
+  "background_color": "#0f1724",
+  "theme_color": "#8C1515",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

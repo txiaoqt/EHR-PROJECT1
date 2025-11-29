@@ -1,0 +1,30 @@
+/* THEMES: explicit LIGHT and DARK */
+
+/* LIGHT THEME */
+:root[data-theme="light"],
+:root {
+  --bg: #f8f9fb;
+  --panel: #ffffff;
+  --text: #1a1a1a;
+  --muted: #6b7280;
+
+  --accent: #8C1515;    /* cardinal red */
+  --danger: #ef4444;    /* red */
+
+  --input-border: rgba(0,0,0,0.08);
+  --card-shadow: rgba(0,0,0,0.05);
+}
+
+/* DARK THEME */
+:root[data-theme="dark"]{
+  --bg: #071022;
+  --panel: #0b1220;
+  --text: #e6eef6;
+  --muted: #94a3b8;
+
+  --accent: #8C1515;
+  --danger: #ef4444;
+
+  --input-border: rgba(255,255,255,0.08);
+  --card-shadow: rgba(0,0,0,0.25);
+}

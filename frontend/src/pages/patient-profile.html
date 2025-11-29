@@ -1,0 +1,155 @@
+<section class="card" style="padding:16px">
+  <div style="display:flex;gap:12px;align-items:center">
+    <div style="width:72px;height:72px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;color:white;font-weight:700">JD</div>
+    <div>
+      <div style="font-size:18px;font-weight:700" id="profile-name">Juan Dela Cruz</div>
+      <div style="color:var(--muted);font-size:13px" id="profile-meta">Student #2021-01234 · 3rd Year · Male</div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn" id="newEncounterFromProfile">New Encounter</button>
+      <button class="btn" id="editProfileBtn" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.03)">Edit</button>
+    </div>
+  </div>
+
+  <div style="margin-top:12px;border-bottom:1px solid rgba(255,255,255,0.02);padding-bottom:8px;display:flex;gap:8px">
+    <button class="tab active" data-tab="overview" style="background:transparent;border:none;padding:8px 10px;border-radius:8px">Overview</button>
+    <button class="tab" data-tab="encounters" style="background:transparent;border:none;padding:8px 10px;border-radius:8px">Encounters</button>
+    <button class="tab" data-tab="vitals" style="background:transparent;border:none;padding:8px 10px;border-radius:8px">Vitals</button>
+    <button class="tab" data-tab="attachments" style="background:transparent;border:none;padding:8px 10px;border-radius:8px">Attachments</button>
+    <button class="tab" data-tab="audit" style="background:transparent;border:none;padding:8px 10px;border-radius:8px">Audit</button>
+  </div>
+
+  <div id="tab-content" style="margin-top:12px">
+    <div class="tab-panel" data-panel="overview">
+      <div style="display:grid;grid-template-columns:1fr 360px;gap:18px">
+        <div class="card">
+          <h3 style="margin-top:0">Demographics</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><strong>DOB</strong><div style="color:var(--muted)">2003-04-12</div></div>
+            <div><strong>Contact</strong><div style="color:var(--muted)">0917-123-4567</div></div>
+            <div><strong>Address</strong><div style="color:var(--muted)">123 Sampaloc St.</div></div>
+            <div><strong>Allergies</strong><div style="color:var(--muted)">None</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin-top:0">Quick Actions</h3>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="btn" id="recordVitalsProfileBtn">Record Vitals</button>
+            <button class="btn" id="newEncounterProfileQuickBtn">New Encounter</button>
+            <button class="btn" id="exportSummaryBtn" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.03)">Export Summary</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="encounters" style="display:none">
+      <div class="card">
+        <h3 style="margin-top:0">Encounters</h3>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between;padding:8px;border-radius:8px;background:rgba(255,255,255,0.01)">
+            <div><strong>2025-11-20</strong> — Fever</div>
+            <div style="color:var(--muted)">Dr. Rivera</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px;border-radius:8px;background:rgba(255,255,255,0.01)">
+            <div><strong>2025-06-12</strong> — Wound care</div>
+            <div style="color:var(--muted)">Nurse Santos</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="vitals" style="display:none">
+      <div class="card">
+        <h3 style="margin-top:0">Vitals History</h3>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between"><div>2025-11-20 — Temp</div><div style="color:var(--muted)">37.8 °C</div></div>
+          <div style="display:flex;justify-content:space-between"><div>2025-11-20 — BP</div><div style="color:var(--muted)">120/80</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="attachments" style="display:none">
+      <div class="card">
+        <h3 style="margin-top:0">Attachments</h3>
+        <div style="color:var(--muted)">No attachments uploaded.</div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-panel="audit" style="display:none">
+      <div class="card">
+        <h3 style="margin-top:0">Audit Trail</h3>
+        <div style="color:var(--muted)">No audit entries.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // tab switching
+  document.querySelectorAll('.tab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      document.querySelectorAll('.tab-panel').forEach(panel=>{
+        panel.style.display = (panel.dataset.panel === tab) ? '' : 'none';
+      });
+    });
+  });
+
+  // sample navigation param support: if app sets params, update profile header
+  let currentPatientId = '2021-01234';
+  let currentPatientName = 'Juan Dela Cruz';
+
+  function handlePageParams(params){
+    if(params?.id){
+      currentPatientId = params.id;
+      document.getElementById('profile-meta').textContent = `Student #${params.id} · (loaded demo)`;
+      // In a real app, you would fetch patient data based on ID here
+    }
+    if(params?.patientName){
+       currentPatientName = params.patientName;
+       document.getElementById('profile-name').textContent = currentPatientName;
+    }
+  }
+
+  // Listen for the custom event dispatched in app.js after page load
+  document.querySelector('.card')?.addEventListener('page:params', (e) => {
+    handlePageParams(e.detail);
+  });
+  
+  // Also handle the initial page load when navigation event might not be caught here
+  window.addEventListener('load', () => {
+    // Check URL params if using a real router, for demo, we rely on the custom event.
+  });
+
+  // Edit Profile button
+  document.getElementById('editProfileBtn')?.addEventListener('click', () => {
+    alert(`Editing profile for ${currentPatientName} (ID: ${currentPatientId})`);
+  });
+
+  // New encounter button (Header button)
+  document.getElementById('newEncounterFromProfile')?.addEventListener('click', ()=>{
+    window.dispatchEvent(new CustomEvent('app:navigate', { detail: { page: 'encounter', params: { patientId: currentPatientId, patientName: currentPatientName } }}));
+  });
+
+  // New Encounter button (Quick Actions button)
+  document.getElementById('newEncounterProfileQuickBtn')?.addEventListener('click', ()=>{
+    window.dispatchEvent(new CustomEvent('app:navigate', { detail: { page: 'encounter', params: { patientId: currentPatientId, patientName: currentPatientName } }}));
+  });
+
+  // Record Vitals button (Quick Actions)
+  document.getElementById('recordVitalsProfileBtn')?.addEventListener('click', () => {
+    alert(`Recording vitals for ${currentPatientName} (ID: ${currentPatientId}). (Modal to be implemented)`);
+  });
+
+  // Export Summary button (Quick Actions)
+  document.getElementById('exportSummaryBtn')?.addEventListener('click', () => {
+    if(window.exportCsv){
+      window.exportCsv(`summary_${currentPatientId}.csv`, `patient_id,summary\n${currentPatientId},Patient summary exported for demo.`);
+      alert(`Patient summary for ${currentPatientName} exported as CSV.`);
+    }
+  });
+
+</script>

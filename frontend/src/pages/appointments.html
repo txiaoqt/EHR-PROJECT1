@@ -1,0 +1,311 @@
+<section class="page">
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:12px">
+      <h2 style="margin:0">Appointments</h2>
+
+      <div style="margin-left:auto;display:flex;gap:12px;align-items:center">
+        <select id="appt-filter" class="input">
+          <option value="all">All</option>
+          <option value="today">Today</option>
+          <option value="queued">Checked-in</option>
+        </select>
+        <button class="btn" id="newApptBtn">New Appointment</button>
+      </div>
+    </div> <div id="appt-calendar" style="margin-top:12px; min-height:120px;"></div>
+
+    <div id="appt-tracker" style="margin-top:12px; padding:6px 4px;">
+      <div id="appt-tracker-inner" style="display:flex;gap:8px;overflow-x:auto;padding:4px 2px;"></div>
+    </div>
+
+    <div style="margin-top:12px; overflow:auto">
+      <table class="table" aria-label="Appointments table">
+        <thead>
+          <tr><th>Time</th><th>Patient</th><th>Type</th><th>Clinician</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          <tr data-date="2025-11-21"><td>09:00</td><td>Juan Dela Cruz</td><td>Consult</td><td>Dr. Rivera</td><td class="label-muted">Scheduled</td><td><button class="btn appt-action-btn" data-action="check-in">Check-in</button></td></tr>
+          <tr data-date="2025-11-21"><td>09:30</td><td>Maria Santos</td><td>Follow-up</td><td>Nurse Santos</td><td class="label-muted">Checked-in</td><td><button class="btn appt-action-btn" data-action="open">Open</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Helper for date key
+  function dateKey(d){
+    // This is a common pattern for ISO date string without time
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  const todayKey = dateKey(new Date());
+
+  // month preview calendar (renders below header)
+  function renderCalendar(container, selectedDateKey){
+    if(!container) return;
+    // Set up the date for the calendar view (start of the month for the selected date)
+    const viewDate = selectedDateKey ? new Date(selectedDateKey) : new Date();
+    const month = viewDate.getMonth();
+    const year = viewDate.getFullYear();
+    const first = new Date(year, month, 1);
+    const last = new Date(year, month + 1, 0);
+
+    let html = `<div style="display:flex;justify-content:center;align-items:center;padding:0 24px;">
+                  <button type="button" id="prevMonth" style="background:transparent;border:none;cursor:pointer;color:var(--text);padding:8px">←</button>
+                  <strong style="flex:1;text-align:center">${viewDate.toLocaleString(undefined,{month:'long', year:'numeric'})}</strong>
+                  <button type="button" id="nextMonth" style="background:transparent;border:none;cursor:pointer;color:var(--text);padding:8px">→</button>
+                </div>`;
+    html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:8px;padding:0 24px">';
+    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(w => {
+      html += `<div style="font-size:12px;color:var(--muted);text-align:center">${w}</div>`;
+    });
+
+    for(let i=0;i<first.getDay();i++) html += '<div></div>';
+    
+    for(let day=1; day<=last.getDate(); day++){
+      const currentDate = new Date(year, month, day);
+      const currentKey = dateKey(currentDate);
+      const isToday = currentKey === todayKey;
+      const isSelected = currentKey === selectedDateKey;
+
+      let styles = 'padding:6px;border-radius:6px;text-align:center;cursor:pointer;';
+      if(isSelected){
+        // Selected day style
+        styles += 'background:var(--accent);color:white;font-weight:700;box-shadow:0 2px 4px rgba(0,0,0,0.1);';
+      } else if(isToday){
+        // Today style - Fixed faulty CSS variable reference
+        styles += 'border:1px solid var(--accent);background:rgba(140, 21, 21, 0.1);'; 
+      } else {
+        styles += 'background:transparent;';
+      }
+
+      html += `<div style="${styles}" data-date="${currentKey}" class="calendar-day">${day}</div>`;
+    }
+    html += '</div>';
+
+    container.innerHTML = html;
+
+    // Add event listeners for navigation and selection
+    container.querySelector('#prevMonth')?.addEventListener('click', () => {
+      viewDate.setMonth(viewDate.getMonth() - 1);
+      renderCalendar(container, selectedDate);
+    });
+    container.querySelector('#nextMonth')?.addEventListener('click', () => {
+      viewDate.setMonth(viewDate.getMonth() + 1);
+      renderCalendar(container, selectedDate);
+    });
+    container.querySelectorAll('.calendar-day').forEach(dayEl => {
+      dayEl.addEventListener('click', () => {
+        const key = dayEl.dataset.date;
+        const trackerInner = document.getElementById('appt-tracker-inner');
+        const trackerBtn = trackerInner.querySelector(`[data-date="${key}"]`);
+        
+        // If the date is visible in the tracker, click the tracker button
+        if(trackerBtn){
+          trackerBtn.click();
+        } else {
+          // Date is outside tracker range - just update the table filter and calendar highlight
+          selectedDate = key;
+          filterTableByDate(selectedDate);
+          renderCalendar(container, selectedDate);
+          
+          // Clear visual selection on the tracker days
+          document.querySelectorAll('.tracker-day').forEach(el => { 
+            const isElToday = el.dataset.date === todayKey;
+            el.style.border = '1px solid transparent'; 
+            el.style.boxShadow = 'none'; 
+            el.style.background = isElToday ? 'linear-gradient(90deg,var(--accent),var(--danger))' : 'transparent';
+            el.style.color = isElToday ? '#fff' : 'var(--text)';
+          });
+        }
+      });
+    });
+  }
+
+  const calContainer = document.getElementById('appt-calendar');
+  if(calContainer) renderCalendar(calContainer);
+
+  // Tracker + filtering logic (uses data-date on rows)
+  const trackerInner = document.getElementById('appt-tracker-inner');
+  
+  function buildApptMap(){
+    const map = {};
+    const rows = Array.from(document.querySelectorAll('table[aria-label="Appointments table"] tbody tr'));
+    rows.forEach(r => {
+      const d = r.getAttribute('data-date');
+      const key = d || todayKey; // fallback to today
+      map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  }
+
+  // selectedDate: ISO yyyy-mm-dd string representing currently selected day (used for filtering)
+  let selectedDate = todayKey;
+
+  function filterTableByDate(key){
+    const rows = Array.from(document.querySelectorAll('table[aria-label="Appointments table"] tbody tr'));
+    rows.forEach(r => {
+      const rdate = r.getAttribute('data-date') || todayKey;
+      r.style.display = (key === null || rdate === key) ? '' : 'none';
+    });
+  }
+
+  function filterTableByStatus(status){
+    const rows = Array.from(document.querySelectorAll('table[aria-label="Appointments table"] tbody tr'));
+    rows.forEach(r => {
+      const rstatus = r.querySelector('td:nth-child(5)').textContent.trim();
+      r.style.display = (status && rstatus === status) ? '' : 'none';
+    });
+  }
+
+
+  function buildTracker(daysAhead = 14){
+    if(!trackerInner) return;
+    trackerInner.innerHTML = '';
+    const apptMap = buildApptMap();
+    for(let i=0;i<daysAhead;i++){
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      const key = dateKey(d);
+      const count = apptMap[key] || 0;
+      const isToday = (i===0);
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tracker-day';
+      btn.style.minWidth = '86px';
+      btn.style.padding = '8px';
+      btn.style.borderRadius = '8px';
+      btn.style.border = '1px solid transparent';
+      // Initial style: Today gets the gradient, others are transparent
+      btn.style.background = isToday ? 'linear-gradient(90deg,var(--accent),var(--danger))' : 'transparent';
+      btn.style.color = isToday ? '#fff' : 'var(--text)';
+      btn.style.display = 'flex';
+      btn.style.flexDirection = 'column';
+      btn.style.alignItems = 'center';
+      btn.style.cursor = 'pointer';
+      btn.dataset.date = key;
+      btn.innerHTML = `<div style="font-size:12px;color:inherit">${d.toLocaleDateString(undefined,{weekday:'short'})}</div>
+                       <div style="font-weight:700;font-size:16px;margin-top:6px;color:inherit">${d.getDate()}</div>`;
+
+      if(count > 0){
+        const badge = document.createElement('div');
+        badge.textContent = count;
+        badge.style.marginTop = '8px';
+        badge.style.fontSize = '12px';
+        badge.style.padding = '3px 8px';
+        badge.style.borderRadius = '999px';
+        badge.style.background = 'var(--danger)';
+        badge.style.color = '#fff';
+        btn.appendChild(badge);
+      }
+
+      btn.addEventListener('click', ()=>{
+        selectedDate = key;
+        // render month view to the selected date's month, and highlight the day
+        if(calContainer) renderCalendar(calContainer, key);
+        
+        // visual selection: Reset all, then apply selection style
+        document.querySelectorAll('.tracker-day').forEach(el => {
+            const isElToday = el.dataset.date === todayKey;
+            el.style.border = '1px solid transparent';
+            el.style.boxShadow = 'none';
+            // Reset background/color based on whether it is "today"
+            el.style.background = isElToday ? 'linear-gradient(90deg,var(--accent),var(--danger))' : 'transparent';
+            el.style.color = isElToday ? '#fff' : 'var(--text)';
+        });
+
+        // Apply selected style to the clicked button
+        if(key === todayKey){
+            // If selecting today, keep the gradient
+        } else {
+            // If selecting a different day, apply border/shadow, remove gradient
+            btn.style.border = '1px solid var(--accent)';
+            btn.style.boxShadow = '0 6px 18px rgba(0,0,0,0.08)';
+            btn.style.background = 'transparent';
+            btn.style.color = 'var(--text)';
+        }
+
+        // filter table to that day
+        filterTableByDate(selectedDate);
+        // Reset filter select to 'all' or 'today'
+        const apptFilter = document.getElementById('appt-filter');
+        if(apptFilter) apptFilter.value = (key === todayKey) ? 'today' : 'all';
+      });
+
+      trackerInner.appendChild(btn);
+    }
+    // scroll to today
+    const todayBtn = trackerInner.querySelector('[data-date="'+todayKey+'"]');
+    if(todayBtn) todayBtn.scrollIntoView({ inline: 'center', behavior: 'auto' });
+  }
+
+  // initial render
+  buildTracker(14);
+  // initial filter (show all by default)
+  filterTableByDate(null);
+
+  // appt-filter behavior: when user selects a filter option
+  const apptFilter = document.getElementById('appt-filter');
+  if(apptFilter){
+    apptFilter.addEventListener('change', ()=>{
+      if(apptFilter.value === 'today') filterTableByDate(todayKey); // Filter by actual Today's date
+      else if(apptFilter.value === 'queued') filterTableByStatus('Checked-in');
+      else filterTableByDate(null); // 'all'
+    });
+  }
+
+  // Action buttons (Check-in/Open) functionality
+  // New Appointment button
+  document.getElementById('newApptBtn')?.addEventListener('click', () => {
+    console.log('New Appointment button clicked');
+    alert('Open new appointment modal (implement later).');
+  });
+
+  // Check-in/Open buttons
+  document.querySelectorAll('.appt-action-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      const row = btn.closest('tr');
+      const patient = row.querySelector('td:nth-child(2)').textContent;
+      const time = row.querySelector('td:nth-child(1)').textContent;
+      // Get the status cell (5th column)
+      const statusCell = row.querySelector('td:nth-child(5)');
+
+      console.log(`Appointment action: ${action} for ${patient} at ${time}`);
+
+      if(action === 'check-in'){
+        // 1. Update status
+        statusCell.textContent = 'Checked-in';
+        // 2. Change button text/action
+        btn.textContent = 'Open';
+        btn.dataset.action = 'open';
+        // 3. Open New Encounter page
+        alert(`Checked-in ${patient} for ${time}. Opening New Encounter...`);
+        window.dispatchEvent(new CustomEvent('app:navigate', { 
+            detail: { 
+                page: 'encounter', 
+                params: { 
+                    patientName: patient, 
+                    // Assume patient ID/Student # is needed to prepopulate the encounter form
+                    patientId: patient === 'Juan Dela Cruz' ? '2021-01234' : 'N/A' 
+                } 
+            } 
+        }));
+
+      } else if (action === 'open') {
+        // Navigate to encounter page, passing the patient's name
+        alert(`Opening encounter page for ${patient}.`);
+        window.dispatchEvent(new CustomEvent('app:navigate', { 
+            detail: { 
+                page: 'encounter', 
+                params: { 
+                    patientName: patient, 
+                    // Assume patient ID/Student # is needed to prepopulate the encounter form
+                    patientId: patient === 'Maria Santos' ? '2020-04567' : 'N/A' 
+                } 
+            } 
+        }));
+      }
+    });
+  });
+</script>
