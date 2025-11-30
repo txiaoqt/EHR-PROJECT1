@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
@@ -207,26 +208,65 @@ const Appointments = () => {
   };
 
   const renderTracker = () => {
-    const buttons = [];
-    for (let i = 0; i < 14; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      const key = dateKey(d);
-      const count = apptMap[key] || 0;
-      const isToday = i === 0;
-      let styles = { minWidth: '86px', padding: '8px', borderRadius: '8px', border: '1px solid transparent', background: isToday ? 'linear-gradient(90deg,var(--accent),var(--danger))' : 'transparent', color: isToday ? '#fff' : 'var(--text)', display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' };
-      if (selectedDate === key && !isToday) styles = { ...styles, border: '1px solid var(--accent)', boxShadow: '0 6px 18px rgba(0,0,0,0.08)', background: 'transparent', color: 'var(--text)' };
-
-      buttons.push(
-        <button key={key} style={styles} onClick={() => setSelectedDate(key)}>
-          <div style={{ fontSize: '12px' }}>{d.toLocaleDateString(undefined, { weekday: 'short' })}</div>
-          <div style={{ fontWeight: 700, fontSize: '16px', marginTop: '6px' }}>{d.getDate()}</div>
-          {count > 0 && <div style={{ marginTop: '8px', fontSize: '12px', padding: '3px 8px', borderRadius: '999px', background: 'var(--danger)', color: '#fff' }}>{count}</div>}
-        </button>
-      );
+  // Build a week starting Sunday and ending Saturday (7 days only)
+  const buttons = [];
+  const start = new Date();
+  // move to Sunday of current week
+  start.setDate(start.getDate() - start.getDay());
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const key = dateKey(d);
+    const count = apptMap[key] || 0;
+    const isToday = key === todayKey;
+    const isSelected = key === selectedDate;
+    // Use styles similar to previous implementation but for 7 days
+    let styles = {
+      minWidth: '86px',
+      padding: '8px',
+      borderRadius: '8px',
+      border: '1px solid transparent',
+      background: isToday ? 'linear-gradient(90deg,var(--accent),var(--danger))' : 'transparent',
+      color: isToday ? '#fff' : 'var(--text)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      cursor: 'pointer'
+    };
+    if (isSelected && !isToday) {
+      styles = { ...styles, border: '1px solid var(--accent)', boxShadow: '0 6px 18px rgba(0,0,0,0.08)', background: 'transparent', color: 'var(--text)' };
     }
-    return <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '4px 2px' }}>{buttons}</div>;
-  };
+
+    buttons.push(
+      <button
+        key={key}
+        style={styles}
+        onClick={() => {
+          setSelectedDate(key);
+          setFilter(key === todayKey ? 'today' : 'selected');
+        }}
+      >
+        <div style={{ fontSize: '12px' }}>{d.toLocaleDateString(undefined, { weekday: 'short' })}</div>
+        <div style={{ fontWeight: 700, fontSize: '16px', marginTop: '6px' }}>{d.getDate()}</div>
+        {count > 0 && <div style={{ marginTop: '8px', fontSize: '12px', padding: '3px 8px', borderRadius: '999px', background: 'var(--danger)', color: '#fff' }}>{count}</div>}
+      </button>
+    );
+  }
+
+  // Center the 7-day row horizontally
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',   // <-- centers the buttons row
+      gap: '8px',
+      overflowX: 'auto',
+      padding: '4px 2px',
+      width: '100%'
+    }}>
+      {buttons}
+    </div>
+  );
+};
 
   return (
     <main className="main">
@@ -284,7 +324,31 @@ const Appointments = () => {
                   Clinician: <strong>{newAppt.clinician_name || 'Not logged in'}</strong>
                 </div>
               </div>
-              <button className="btn" onClick={submitNewAppointment} disabled={!newAppt.patient_id}>Save Appointment</button>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(0,0,0,0.15)',
+                  background: '#f3f3f3',
+                  color: '#333',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+                }}
+                >
+                  Cancel
+                  </button>
+                  <button
+                  className="btn"
+                  onClick={submitNewAppointment}
+                  disabled={!newAppt.patient_id}
+                  >
+                    Save Appointment
+                    </button>
+                    </div>
             </div>
           )}
           <div style={{ marginTop: '12px', padding: '6px 4px' }}>
