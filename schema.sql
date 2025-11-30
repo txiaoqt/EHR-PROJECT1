@@ -160,20 +160,6 @@ INSERT INTO encounters (patient_id, clinician_name, encounter_date, chief_compla
 ('2021-07892', 'Dr. Rivera', '2025-11-07T13:00:00+08:00', 'Joint pain', 'NSAIDs, physical therapy referral', '{"temp": "98.7", "pulse": "83", "bp": "122/84", "weight": "72"}'),
 ('2023-04321', 'Dr. Rivera', '2025-11-24T09:45:00+08:00', 'Migraine', 'Triptans, migraine prevention meds', '{"temp": "98.3", "pulse": "88", "bp": "124/86", "weight": "58"}'),
 ('2020-07893', 'Nurse Santos', '2025-11-06T10:30:00+08:00', 'Stress related symptoms', 'Counseling, stress management', '{"temp": "97.9", "pulse": "82", "bp": "115/72", "weight": "61"}'),
-('2022-03210', 'Dr. Rivera', '2025-11-25T12:30:00+08:00', 'Sinus congestion', 'Decongestants, nasal spray', '{"temp": "98.8", "pulse": "79", "bp": "117/75", "weight": "56"}');
-
-INSERT INTO inventory (item_name, stock_quantity, reorder_level) VALUES
-('Paracetamol 500mg', 20, 10),
-('Gauze', 120, 50),
-('Bandages 5cm', 50, 30),
-('Aspirin 300mg', 8, 15),
-('Thermometers', 25, 5),
-('Blood Pressure Monitors', 12, 8),
-('Syringes 5ml', 200, 100),
-('Antiseptic Cream', 35, 20),
-('Gloves (pairs)', 150, 75),
-('Face Masks', 100, 50);
-
 INSERT INTO inventory_transactions (item_name, transaction_type, quantity, reason, performed_by) VALUES
 ('Paracetamol 500mg', 'out', 5, 'Patient J. Dela Cruz', 'Dr. Rivera'),
 ('Gauze', 'out', 2, 'Dressing change', 'Nurse Santos'),
