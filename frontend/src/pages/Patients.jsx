@@ -1,185 +1,465 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { logAudit } from '../utils.js';
 
 const Patients = () => {
   const navigate = useNavigate();
+
+  // data
   const [patients, setPatients] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchPatients = async () => {
-      const { data, error } = await supabase.from('patients').select('*').order('name');
-      if (!error) {
-        setPatients(data || []);
-      } else {
-        console.error('Error fetching patients:', error);
-      }
-    };
-    fetchPatients();
-  }, []);
+  // search & sort
   const [search, setSearch] = useState('');
+  const [sortOption, setSortOption] = useState('name_desc');
 
-  const filteredPatients = patients.filter(p =>
-    search === '' || p.name.toLowerCase().includes(search.toLowerCase()) || p.id.includes(search)
-  );
-
-  const handleOpenProfile = (id) => {
-    navigate('/patient-profile', { state: { patientId: id } });
-  };
-
-  const handleNewEncounter = (patient) => {
-    navigate('/encounter', { params: { patientId: patient.id, patientName: patient.name } });
-  };
-
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-
-  const handleDeletePatient = (patient) => {
-    setDeleteConfirm(patient);
-  };
-
-  const confirmDelete = async () => {
-    if (deleteConfirm) {
-      console.log('Attempting to delete patient:', deleteConfirm.id);
-      const { error } = await supabase.from('patients').delete().eq('id', deleteConfirm.id);
-      if (!error) {
-        setPatients(prev => prev.filter(p => p.id !== deleteConfirm.id));
-        setDeleteConfirm(null);
-      } else {
-        console.error('Error deleting patient:', error);
-        setDeleteConfirm(null);
-        alert('Error deleting patient');
-      }
-    }
-  };
-
-  const cancelDelete = () => {
-    setDeleteConfirm(null);
-  };
-
-  const [showForm, setShowForm] = useState(false);
-  const [newPatient, setNewPatient] = useState({ name: '', id: '', year: 1 });
+  // register modal
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [registerTab, setRegisterTab] = useState('search'); // 'search' | 'manual'
+  // search mode
   const [studentSearch, setStudentSearch] = useState('');
   const [studentSuggestions, setStudentSuggestions] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  // manual mode
+  const [manualStudent, setManualStudent] = useState({ name: '', id: '', year: 1 });
 
-  useEffect(() => {
-    const fetchStudents = async () => {
-      if (!studentSearch) return [];
-      const { data } = await supabase
-        .from('students')
-        .select('id, name, year')
-        .or(`name.ilike.%${studentSearch}%,id.ilike.%${studentSearch}%`)
-        .limit(10);
-      setStudentSuggestions(data || []);
-    };
-    fetchStudents();
-  }, [studentSearch]);
+  const [showNewStudentForm, setShowNewStudentForm] = useState(false);
 
-  const handleNewPatient = () => setShowForm(!showForm);
+  // state for registering
+  const [registering, setRegistering] = useState(false);
 
-  const submitNewPatient = async () => {
-    const lastVisit = new Date().toISOString().split('T')[0];
-    const { error } = await supabase.from('patients').insert([{ ...newPatient, last_visit_date: lastVisit }]);
-    if (!error) {
-      setPatients(prev => [...prev, { ...newPatient, last_visit_date: lastVisit, created_at: new Date().toISOString() }]);
-      // Log audit entry
-      await logAudit('Patient Registration', `Registered new patient: ${newPatient.name} (${newPatient.id})`);
-      setShowForm(false);
-      setNewPatient({ name: '', id: '', year: 1 });
-      setStudentSearch('');
-      setStudentSuggestions([]);
-    } else {
-      alert('Error registering patient');
+  // toast
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const showToast = (text, type = 'success') => {
+    setToast({ text, type });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+  };
+
+  // fetch patients
+  const fetchPatients = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('patients').select('*').order('name', { ascending: true });
+      if (error) {
+        console.error('Error fetching patients:', error);
+        showToast('Failed to fetch patients', 'error');
+      } else {
+        setPatients(data || []);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to fetch patients', 'error');
+    } finally {
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchPatients();
+    return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // student suggestions for search tab
+  useEffect(() => {
+    let mounted = true;
+    const fetchStudents = async () => {
+      const q = (studentSearch || '').trim();
+      if (!q || q.length < 2) {
+        setStudentSuggestions([]);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('students')
+          .select('id, name, year')
+          .or(`name.ilike.%${q}%,id.ilike.%${q}%`)
+          .limit(8)
+          .order('name', { ascending: true });
+        if (error) console.error('Error fetching students:', error);
+        else if (mounted) setStudentSuggestions(data || []);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const deb = setTimeout(fetchStudents, 200);
+    return () => { mounted = false; clearTimeout(deb); };
+  }, [studentSearch]);
+
+  // Sorting and filtering
+  const filteredPatients = patients.filter(p =>
+    search.trim() === '' ||
+    (p.name && p.name.toLowerCase().includes(search.toLowerCase())) ||
+    (p.id && p.id.toString().toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const sortedPatients = React.useMemo(() => {
+    const arr = (filteredPatients || []).slice();
+    const [field, dir] = (sortOption || 'name_desc').split('_');
+    arr.sort((a, b) => {
+      const get = (obj, f) => {
+        if (f === 'last') return new Date(obj.last_visit_date || 0).getTime();
+        if (f === 'year') return Number(obj.year || 0);
+        return (obj[f] || '').toString().toLowerCase();
+      };
+      const va = get(a, field === 'last' ? 'last' : field);
+      const vb = get(b, field === 'last' ? 'last' : field);
+      if (va > vb) return dir === 'asc' ? 1 : -1;
+      if (va < vb) return dir === 'asc' ? -1 : 1;
+      return 0;
+    });
+    return arr;
+  }, [filteredPatients, sortOption]);
+
+  // create student (manual tab) - insert into students table and select it automatically
+  const submitCreateStudent = async () => {
+    if (!manualStudent.name || !manualStudent.id) {
+      showToast('Student name and ID are required', 'error');
+      return;
+    }
+    try {
+      const payload = { id: manualStudent.id, name: manualStudent.name, year: Number(manualStudent.year || 1) };
+      const { error } = await supabase.from('students').insert([payload]).select();
+
+      if (error) {
+        // if insert fails (e.g. already exists) attempt to fetch existing
+        console.warn('create student error', error);
+        const { data: existing, error: fetchErr } = await supabase.from('students').select('id,name,year').eq('id', manualStudent.id).single();
+        if (fetchErr) {
+          console.error('fetch after insert fail', fetchErr);
+          showToast('Failed to create student', 'error');
+          return;
+        }
+        setSelectedStudent(existing);
+        showToast('Student exists — selected', 'success');
+      } else {
+        setSelectedStudent(payload);
+        showToast('Student created & selected', 'success');
+        try { await logAudit('Student Create', `Created new student: ${payload.name} (${payload.id})`); } catch (e) { console.warn('audit failed', e); }
+      }
+      // switch preview to selected student
+      setShowNewStudentForm(false);
+      setStudentSearch('');
+      setStudentSuggestions([]);
+      setRegisterTab('search');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to create student', 'error');
+    }
+  };
+
+  // register patient (from modal) — uses selectedStudent (from search or manual)
+  const submitRegisterPatient = async (studentToRegister) => {
+    const s = studentToRegister || selectedStudent;
+    if (!s || !s.id) {
+      showToast('No student selected', 'error');
+      return;
+    }
+    if (patients.some(p => (p.id || '').toString() === (s.id || '').toString())) {
+      showToast('This student is already registered as a patient', 'error');
+      return;
+    }
+
+    setRegistering(true);
+    try {
+      const lastVisit = new Date().toISOString().split('T')[0];
+      const payload = {
+        id: s.id,
+        name: s.name,
+        year: s.year || 1,
+        last_visit_date: lastVisit
+      };
+      const { error } = await supabase.from('patients').insert([payload]);
+
+      if (error) {
+        console.error('Error registering patient', error);
+        showToast('Error registering patients', 'error');
+      } else {
+        showToast('Patient registered', 'success');
+        await fetchPatients(); // refresh list
+        try { await logAudit('Patient Registration', `Registered new patient: ${payload.name} (${payload.id})`); } catch (e) { console.warn('audit failed', e); }
+        // close modal and reset
+        setShowRegisterModal(false);
+        setSelectedStudent(null);
+        setManualStudent({ name: '', id: '', year: 1 });
+        setStudentSearch('');
+        setStudentSuggestions([]);
+        setShowNewStudentForm(false);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Registration failed', 'error');
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  // navigation helpers
+  const handleOpenProfile = (patientId) => navigate('/patient-profile', { state: { patientId } });
+  const handleNewEncounter = (patient) => navigate('/encounter', { state: { patientId: patient.id, patientName: patient.name } });
+
+  // preview item (student to show in modal)
+  const previewStudent = selectedStudent ? selectedStudent : (manualStudent.name ? manualStudent : null);
+
+  // UI helpers
+  const sortOptions = [
+    { value: 'name_asc', label: 'Name ↑' },
+    { value: 'name_desc', label: 'Name ↓' },
+    { value: 'year_asc', label: 'Year ↑' },
+    { value: 'year_desc', label: 'Year ↓' },
+    { value: 'last_asc', label: 'Last Visit ↑' },
+    { value: 'last_desc', label: 'Last Visit ↓' }
+  ];
 
   return (
     <main className="main">
       <section className="page">
-        <div className="card" style={{ padding: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <div style={{ fontSize: '18px', fontWeight: 700 }}>Patients</div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 25, fontWeight: 700 }}>Patients</div>
+
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
               <input
                 id="patients-search"
                 type="search"
                 placeholder="Search by name, student number..."
-                style={{ padding: '8px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.06)', minWidth: '300px' }}
+                style={{ padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', minWidth: 260 }}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
-              <button className="btn" onClick={handleNewPatient}>Register Patient</button>
+
+              <select
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value)}
+                style={{ padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }}
+              >
+                {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+
+              <button className="btn" onClick={() => { setShowRegisterModal(true); setRegisterTab('search'); setSelectedStudent(null); setManualStudent({ name: '', id: '', year: 1 }); }}>
+                Register / Add
+              </button>
             </div>
           </div>
-          {showForm && (
-            <div style={{ marginTop: '12px' }} className="card">
-              <h3>Register New Patient</h3>
-              <div style={{ position: 'relative', marginBottom: '8px' }}>
-                <input
-                  placeholder="Search and select student..."
-                  style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.06)' }}
-                  value={studentSearch}
-                  onChange={(e) => setStudentSearch(e.target.value)}
-                />
-                {studentSuggestions.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ddd', maxHeight: '150px', overflowY: 'auto', zIndex: 10 }}>
-                    {studentSuggestions.map(s => (
-                      <div key={s.id} onClick={() => { setStudentSearch(s.name + ' (' + s.id + ')'); setNewPatient(s); setStudentSuggestions([]); }} style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #eee' }}>
-                        {s.name} ({s.id}, Year {s.year})
-                      </div>
-                    ))}
+
+          {/* register modal */}
+          {showRegisterModal && (
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(0,0,0,0.35)', padding: 16
+            }}>
+              <div style={{ width: 940, maxWidth: '98%', background: 'var(--panel)', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', gap: 12, padding: 16, borderBottom: '1px solid rgba(0,0,0,0.04)', alignItems: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800 }}>Register Patient</div>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                    <button className="btn" onClick={() => { setShowRegisterModal(false); setSelectedStudent(null); setStudentSearch(''); setStudentSuggestions([]); setManualStudent({ name: '', id: '', year: 1 }); }}>
+                      Close
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => submitRegisterPatient(previewStudent)}
+                      disabled={!previewStudent || registering}
+                      title={!previewStudent ? 'Preview a student first' : 'Register the previewed student'}
+                    >
+                      {registering ? 'Registering…' : `Register`}
+                    </button>
                   </div>
-                )}
-              </div>
-              {newPatient.id && (
-                <div style={{ marginBottom: '8px' }}>
-                  Selected: <strong>{newPatient.name} ({newPatient.id}, Year {newPatient.year})</strong>
                 </div>
-              )}
-              <button className="btn" onClick={submitNewPatient} disabled={!newPatient.id}>Register Patient</button>
-            </div>
-          )}
-          {deleteConfirm && (
-            <div className="card" style={{ marginTop: '12px', marginBottom: '12px', border: '1px solid var(--danger)', background: 'rgba(220, 53, 69, 0.05)' }}>
-              <div>Are you sure you want to delete patient <strong>{deleteConfirm.name}</strong>?</div>
-              <div style={{ marginTop: '8px' }}>
-                <button className="btn" style={{ background: 'red', color: 'white' }} onClick={confirmDelete}>Yes, Delete</button>
-                <button className="btn" style={{ background: 'transparent', color: 'var(--muted)' }} onClick={cancelDelete}>Cancel</button>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 0, minHeight: 360 }}>
+                  <div style={{ padding: 18 }}>
+                    {/* Tabs */}
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                      <button className="btn" onClick={() => { setRegisterTab('search'); setSelectedStudent(null); setManualStudent({ name: '', id: '', year: 1 }); }}>Search Student</button>
+                      <button className="btn" onClick={() => { setRegisterTab('manual'); setStudentSearch(''); setStudentSuggestions([]); setSelectedStudent(null); }}>Add Student</button>
+                    </div>
+
+                    {/* Search tab */}
+                    {registerTab === 'search' && (
+                      <>
+                        <div style={{ marginBottom: 10 }}>
+                          <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Search students</label>
+                          <input
+                            placeholder="Type name or ID (min 2 chars)"
+                            value={studentSearch}
+                            onChange={(e) => { setStudentSearch(e.target.value); setShowNewStudentForm(false); setSelectedStudent(null); }}
+                            style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }}
+                          />
+                        </div>
+
+                        <div style={{ maxHeight: 220, overflowY: 'auto', borderRadius: 8 }}>
+                          {studentSuggestions.length > 0 ? (
+                            studentSuggestions.map(s => (
+                              <div key={s.id} onClick={() => { setSelectedStudent(s); setStudentSearch(`${s.name} (${s.id})`); setStudentSuggestions([]); }} style={{ padding: 12, borderBottom: '1px solid rgba(0,0,0,0.04)', cursor: 'pointer' }}>
+                                <div style={{ fontWeight: 700 }}>{s.name}</div>
+                                <div style={{ color: 'var(--muted)', fontSize: 13 }}>{s.id} — Year {s.year}</div>
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ padding: 12, color: 'var(--muted)' }}>
+                              No suggestions.
+                            </div>
+                          )}
+                        </div>
+
+                        {selectedStudent && (
+                          <div style={{ marginTop: 12, padding: 12, border: '1px dashed rgba(0,0,0,0.06)', borderRadius: 8 }}>
+                            <div style={{ fontWeight: 800 }}>Selected</div>
+                            <div style={{ marginTop: 6 }}>{selectedStudent.name} — <span style={{ color: 'var(--muted)' }}>{selectedStudent.id}</span> • Year {selectedStudent.year}</div>
+                            <div style={{ marginTop: 10 }}>
+                              <button className="btn" onClick={() => { setSelectedStudent(null); setStudentSearch(''); }}>Change</button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Manual tab */}
+                    {registerTab === 'manual' && (
+                      <>
+                        <div style={{ display: 'grid', gap: 10 }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Full name</label>
+                            <input value={manualStudent.name} onChange={(e) => setManualStudent(prev => ({ ...prev, name: e.target.value }))} placeholder="Student full name" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Student ID</label>
+                              <input value={manualStudent.id} onChange={(e) => setManualStudent(prev => ({ ...prev, id: e.target.value }))} placeholder="e.g. 202012345" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Year</label>
+                              <input value={manualStudent.year} onChange={(e) => setManualStudent(prev => ({ ...prev, year: Number(e.target.value || 1) }))} type="number" min={1} max={8} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+                            <button className="btn" onClick={() => { setManualStudent({ name: '', id: '', year: 1 }); }}>Reset</button>
+                            <button className="btn" onClick={async () => {
+                              // create student and select it (but do not auto register)
+                              await submitCreateStudent();
+                            }}>
+                              Create
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* right column: preview */}
+                  <div style={{ padding: 18, borderLeft: '1px solid rgba(0,0,0,0.04)', background: '#fff' }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10 }}>Preview</div>
+
+                    {!previewStudent ? (
+                      <div style={{ color: 'var(--muted)' }}>No student selected. Use the Search tab or Manual Entry to build the student profile, then click Register.</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ fontWeight: 800, fontSize: 16 }}>{previewStudent.name}</div>
+                        <div style={{ color: 'var(--muted)' }}>{previewStudent.id} • Year {previewStudent.year || '—'}</div>
+                        <div style={{ marginTop: 8 }}>
+                          <div style={{ fontWeight: 700 }}>Register Preview</div>
+                          <div style={{ color: 'var(--muted)', marginTop: 6 }}>
+                            This will create a patient record with the student details shown and set last visit to today's date.
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+
+                          <button
+                            className="btn"
+                            onClick={() => {
+                              // if preview is manual (not in students table) switch to manual tab for edits
+                              if (registerTab !== 'manual') setRegisterTab('manual');
+                              if (previewStudent && previewStudent.id && previewStudent.name && (!selectedStudent || selectedStudent.id !== previewStudent.id)) {
+                                // if preview is manualStudent, populate manualStudent for editing
+                                setManualStudent(prev => ({ ...(previewStudent.id ? previewStudent : prev) }));
+                                setRegisterTab('manual');
+                              }
+                            }}
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
-          <div style={{ marginBottom: '10px', color: 'var(--muted)', fontSize: '13px' }}>
-            Results: <span>{filteredPatients.length}</span>
+
+          {/* results / table */}
+          <div style={{ marginTop: 12, marginBottom: 8, color: 'var(--muted)', fontSize: 13 }}>
+            Results: <strong>{sortedPatients.length}</strong>
           </div>
+
           <div style={{ overflow: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead style={{ textAlign: 'left', color: 'var(--muted)', fontSize: '13px' }}>
+            {/* Use the same table class as Appointments so colors & hover match */}
+            <table className="table" aria-label="Patients table">
+              <thead>
                 <tr>
-                  <th style={{ padding: '10px 8px' }}>Name</th>
-                  <th style={{ padding: '10px 8px' }}>Student #</th>
-                  <th style={{ padding: '10px 8px' }}>Year</th>
-                  <th style={{ padding: '10px 8px' }}>Last Visit</th>
-                  <th style={{ padding: '10px 8px' }}>Actions</th>
+                  <th>Name</th>
+                  <th>ID</th>
+                  <th>Year</th>
+                  <th>Last Visit</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredPatients.map(patient => (
-                  <tr key={patient.id} style={{ borderTop: '1px solid rgba(0,0,0,0.04)' }}>
-                    <td style={{ padding: '10px 8px' }}>{patient.name}</td>
-                    <td style={{ padding: '10px 8px' }}>{patient.id}</td>
-                    <td style={{ padding: '10px 8px' }}>{patient.year}</td>
-                    <td style={{ padding: '10px 8px' }}>{patient.last_visit_date}</td>
-                    <td style={{ padding: '10px 8px' }}>
-                      <button className="btn" onClick={() => handleOpenProfile(patient.id)}>Open</button>
-                      <button className="btn" style={{ background: 'transparent', color: 'var(--muted)', border: '1px solid rgba(255,255,255,0.03)' }} onClick={() => handleNewEncounter(patient)}>New Encounter</button>
-                      <button className="btn" style={{ background: 'var(--danger)', color: 'white' }} onClick={() => handleDeletePatient(patient)}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
+                {loading ? (
+                  <tr><td colSpan={5} style={{ padding: 12 }}>Loading…</td></tr>
+                ) : sortedPatients.length === 0 ? (
+                  <tr><td colSpan={5} style={{ padding: 12, color: 'var(--muted)' }}>No patients found.</td></tr>
+                ) : (
+                  sortedPatients.map(pat => (
+                    // Allow the table's hover/row styles to apply (no inline borders)
+                    <tr key={pat.id}>
+                      <td>
+                        <div>{pat.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}></div>
+                      </td>
+                      <td>
+                        <div>{pat.id}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{/* optional secondary */}</div>
+                      </td>
+                      <td>{pat.year}</td>
+                      <td className="label-muted">{pat.last_visit_date || '—'}</td>
+                      <td style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn secondary" onClick={() => handleOpenProfile(pat.id)}>Open</button>
+                        <button className="btn" onClick={() => handleNewEncounter(pat)}>New Encounter</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
+
+        {/* toast */}
+        {toast && (
+          <div style={{
+            position: 'fixed',
+            top: 20,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 6000,
+            padding: '10px 16px',
+            borderRadius: 8,
+            color: 'white',
+            fontWeight: 700,
+            backgroundColor: toast.type === 'error' ? '#dc3545' : '#28a745',
+            boxShadow: '0 6px 18px rgba(0,0,0,0.12)'
+          }}>
+            {toast.text}
+          </div>
+        )}
       </section>
     </main>
   );
