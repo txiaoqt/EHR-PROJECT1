@@ -1,38 +1,39 @@
-import React, { useState, useEffect } from 'react';
+// src/pages/Encounter.jsx
+import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { logAudit } from '../utils.js';
 import { useAuth } from '../AuthContext.jsx';
 
+// simple student search (keeps your original query behaviour)
 const fetchStudents = async (query) => {
   if (!query) return [];
   const { data } = await supabase
     .from('students')
-    .select('id, name')
+    .select('id, name, year')
     .or(`name.ilike.%${query}%,id.ilike.%${query}%`)
     .limit(10);
   return data || [];
 };
 
+const formatClinicianName = (userData) => {
+  if (!userData) return '';
+  let displayName = userData.name;
+  const prefix = (userData.email || '').split('.')[0].toLowerCase();
+  if (prefix === 'dr' && !displayName.startsWith('Dr.')) displayName = `Dr. ${displayName}`;
+  else if (prefix === 'nurse' && !displayName.startsWith('Nr.')) displayName = `Nr. ${displayName.replace(/^(Nurse\s+)?/, '')}`;
+  else if (prefix === 'admin') displayName = `Admin ${displayName}`;
+  return displayName;
+};
+
 const Encounter = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const clinicianDefault = user ? formatClinicianName(user) : '';
 
-  // Function to format clinician name like in Sidebar
-  const formatClinicianName = (userData) => {
-    if (!userData) return '';
-    let displayName = userData.name;
-    const prefix = userData.email.split('.')[0].toLowerCase();
-    if (prefix === 'dr' && !displayName.startsWith('Dr.')) {
-      displayName = `Dr. ${displayName}`;
-    } else if (prefix === 'nurse' && !displayName.startsWith('Nr.')) {
-      displayName = `Nr. ${displayName.replace(/^(Nurse\s+)?/, '')}`;
-    } else if (prefix === 'admin') {
-      displayName = `Admin ${displayName}`;
-    }
-    return displayName;
-  };
-
-  const [form, setForm] = useState(() => ({
-    patient: '',
+  const [form, setForm] = useState({
+    patient: '',                 // patient id (TUP id) — required
+    patientNameVisible: '',      // text shown in search input
     complaint: '',
     hpi: '',
     exam: '',
@@ -42,102 +43,86 @@ const Encounter = () => {
     bp: '',
     weight: '',
     visitType: 'Walk-in',
-    clinician: user ? formatClinicianName(user) : '',
-    date: '',
-    attachment: null
-  }));
-  const [draftState, setDraftState] = useState('no draft');
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
+    clinician: clinicianDefault,
+    date: ''
+  });
+
   const [patientSearch, setPatientSearch] = useState('');
   const [patientSuggestions, setPatientSuggestions] = useState([]);
+  const searchTimer = useRef(null);
 
+  const [isSaving, setIsSaving] = useState(false);
+
+  // debounced student search
   useEffect(() => {
-    const existing = localStorage.getItem('encounter_draft');
-    if (existing) {
-      try {
-        const obj = JSON.parse(existing);
-        setForm(prev => ({ ...prev, ...obj }));
-        setDraftState('loaded');
-      } catch (e) {}
+    if (!patientSearch) {
+      setPatientSuggestions([]);
+      return;
     }
-  }, []);
-
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      const suggestions = await fetchStudents(patientSearch);
-      setPatientSuggestions(suggestions);
-    };
-    if (patientSearch) fetchSuggestions();
-    else setPatientSuggestions([]);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const results = await fetchStudents(patientSearch);
+        setPatientSuggestions(results);
+      } catch (e) {
+        console.error('Search error', e);
+        setPatientSuggestions([]);
+      }
+    }, 300);
+    return () => clearTimeout(searchTimer.current);
   }, [patientSearch]);
 
-  const handleChange = (e) => {
-    const { id, value } = e.target;
-    setForm(prev => ({ ...prev, [id]: value }));
-  };
+  // helper setter
+  const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
-  const handleFileChange = (e) => {
-    setForm(prev => ({ ...prev, attachment: e.target.files[0] }));
-  };
+  // helper: ensure patient exists (insert from students if not)
+  async function ensurePatientExists(patientId) {
+    if (!patientId) throw new Error('Patient ID missing');
+    const { data: existing, error: checkErr } = await supabase.from('patients').select('id').eq('id', patientId).maybeSingle();
+    if (checkErr) throw checkErr;
+    if (existing && existing.id) return true;
 
-  const saveDraft = () => {
-    const data = {
-      patient: form.patient,
-      complaint: form.complaint,
-      hpi: form.hpi,
-      exam: form.exam,
-      plan: form.plan
-    };
-    localStorage.setItem('encounter_draft', JSON.stringify(data));
-    setDraftState('saved');
+    // try students
+    const { data: studentData, error: studentErr } = await supabase.from('students').select('id,name,year').eq('id', patientId).maybeSingle();
+    if (studentErr) throw studentErr;
+    if (!studentData || !studentData.id) throw new Error('Patient not found in students. Please select a valid student.');
+
+    const { error: insertErr } = await supabase.from('patients').insert([{
+      id: studentData.id,
+      name: studentData.name,
+      year: studentData.year,
+      last_visit_date: new Date().toISOString().slice(0,10)
+    }]);
+    if (insertErr) throw insertErr;
+    return true;
+  }
+
+  const validateForm = () => {
+    if (!form.patient) return 'Please select a patient (pick from suggestions).';
+    if (!form.complaint || form.complaint.trim().length < 2) return 'Chief complaint is required.';
+    return null;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const validation = validateForm();
+    if (validation) {
+      alert(validation);
+      return;
+    }
+
+    setIsSaving(true);
     try {
-      // Check if patient exists in patients table
-      const { data: existingPatient, error: checkError } = await supabase
-        .from('patients')
-        .select('id')
-        .eq('id', form.patient)
-        .single();
-
-      if (!existingPatient && !checkError) {
-        // Patient not found, get from students
-        const { data: studentData, error: studentError } = await supabase
-          .from('students')
-          .select('id, name, year')
-          .eq('id', form.patient)
-          .single();
-
-        if (studentData && !studentError) {
-          // Insert into patients from students data
-          const { error: insertError } = await supabase.from('patients').insert([{
-            id: studentData.id,
-            name: studentData.name,
-            year: studentData.year,
-            last_visit_date: new Date().toISOString().split('T')[0] // today's date as last visit
-          }]);
-          if (insertError) {
-            console.error('Error inserting patient:', insertError);
-            alert('Error creating patient record.');
-            return;
-          }
-        } else {
-          alert('Patient ID not found in students. Please select a valid patient.');
-          return;
-        }
-      } else if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is single row not found
-        throw checkError;
-      }
+      await ensurePatientExists(form.patient);
 
       const encDate = form.date || new Date().toISOString();
       const vitalsJson = {
-        temp: form.temp,
-        pulse: form.pulse,
-        bp: form.bp,
-        weight: form.weight
+        temp: form.temp || null,
+        pulse: form.pulse || null,
+        bp: form.bp || null,
+        weight: form.weight || null
       };
+
       const { error } = await supabase.from('encounters').insert([{
         patient_id: form.patient,
         clinician_name: form.clinician,
@@ -147,17 +132,18 @@ const Encounter = () => {
         physical_exam: form.exam,
         assessment_plan: form.plan,
         vitals: vitalsJson,
-        attachments: []
+        attachments: [] // attachments removed per request
       }]);
+
       if (error) throw error;
-      // Log audit entry
-      await logAudit('Encounter Creation', `Created new encounter for patient ${form.patient} - Chief complaint: ${form.complaint}`);
-      // Dispatch event for dashboard update
+
+      await logAudit('Encounter Creation', `Encounter for ${form.patient} - ${form.complaint}`);
       window.dispatchEvent(new CustomEvent('encounterAdded'));
-      localStorage.removeItem('encounter_draft');
-      setShowSuccessModal(true);
+
+      // reset only encounter fields (keep clinician)
       setForm({
         patient: '',
+        patientNameVisible: '',
         complaint: '',
         hpi: '',
         exam: '',
@@ -167,127 +153,244 @@ const Encounter = () => {
         bp: '',
         weight: '',
         visitType: 'Walk-in',
-        clinician: user ? formatClinicianName(user) : '',
-        date: '',
-        attachment: null
+        clinician: clinicianDefault,
+        date: ''
       });
-      setDraftState('no draft');
+      setPatientSearch('');
+      setPatientSuggestions([]);
+      alert('Encounter saved successfully.');
     } catch (err) {
       console.error('Save error:', err);
-      alert('Error saving encounter.');
+      alert(err?.message || 'Error saving encounter.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const selectPatient = () => {
-    alert('Open patient selection modal (implement later).');
+  const handleSelectSuggestion = (s) => {
+    setForm(prev => ({ ...prev, patient: s.id, patientNameVisible: `${s.name} (${s.id})` }));
+    setPatientSearch(`${s.name} (${s.id})`);
+    setPatientSuggestions([]);
   };
 
   return (
     <main className="main">
       <section className="page">
-        <div className="card" style={{ maxWidth: '1100px', margin: '12px auto' }}>
-          <h1 style={{ margin: 0, fontSize: '24px', color: 'red' }}>Encounter Page Loaded</h1>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-            <h2 style={{ margin: 0 }}>New Encounter</h2>
-            <div style={{ color: 'var(--muted)' }}>Draft autosave: <span>{draftState}</span></div>
-          </div>
-          <form onSubmit={handleSubmit} style={{ marginTop: '14px', display: 'grid', gridTemplateColumns: '1fr 360px', gap: '18px' }}>
+        <div className="card" style={{ maxWidth: 1100, margin: '12px auto', padding: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
             <div>
-              <div className="card" style={{ marginBottom: '12px' }}>
-                <label className="label-muted">Patient</label>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', position: 'relative' }}>
-                  <input type="text" placeholder="Search patient (name or student #)" style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.06)' }} value={patientSearch} onChange={(e) => setPatientSearch(e.target.value)} />
+              <h2 style={{ margin: 0 }}>New Encounter</h2>
+              <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 6 }}>
+                Create a new patient encounter. Required: Patient and Chief Complaint.
+              </div>
+            </div>
+
+            {/* BACK BUTTON (primary) */}
+            <div>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => navigate(-1)}
+                aria-label="Go back"
+              >
+                ←Back
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 360px', gap: 18 }}>
+            <div>
+              {/* Patient selector */}
+              <div className="card" style={{ marginBottom: 12 }}>
+                <label className="label-muted" htmlFor="patient-search">Patient</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 14, position: 'relative' }}>
+                  <input
+                    id="patient-search"
+                    aria-label="Search patient by name or student #"
+                    type="text"
+                    placeholder="Search patient"
+                    style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }}
+                    value={patientSearch}
+                    onChange={e => {
+                      setPatientSearch(e.target.value);
+                      setField('patient', ''); // clear selected id when typing
+                      setField('patientNameVisible', '');
+                    }}
+                    autoComplete="off"
+                  />
+                  <button type="button" className="btn" onClick={() => alert('Patient selector modal not implemented')}>Select</button>
+
                   {patientSuggestions.length > 0 && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ddd', maxHeight: '150px', overflowY: 'auto', zIndex: 10 }}>
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ddd', maxHeight: 180, overflowY: 'auto', zIndex: 20 }}>
                       {patientSuggestions.map(s => (
-                        <div key={s.id} onClick={() => { setPatientSearch(s.name + ' (' + s.id + ')'); setForm(prev => ({ ...prev, patient: s.id })); setPatientSuggestions([]); }} style={{ padding: '8px', cursor: 'pointer', borderBottom: '1px solid #eee' }}>
-                          {s.name} ({s.id})
+                        <div key={s.id}
+                          onClick={() => handleSelectSuggestion(s)}
+                          style={{ padding: 8, cursor: 'pointer', borderBottom: '1px solid #eee' }}>
+                          {s.name} ({s.id}) • Year {s.year}
                         </div>
                       ))}
                     </div>
                   )}
-                  <button type="button" className="btn" onClick={selectPatient}>Select</button>
+                </div>
+                <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 13 }}>
+                  Selected ID: <strong>{form.patient || 'none'}</strong>
                 </div>
               </div>
-              <div className="card" style={{ marginBottom: '12px' }}>
-                <label className="label-muted">Chief Complaint</label>
-                <input id="complaint" className="input" type="text" placeholder="e.g., Fever, cough" value={form.complaint} onChange={handleChange} />
+
+              {/* Chief Complaint */}
+              <div className="card" style={{ marginBottom: 12 }}>
+                <label className="label-muted" htmlFor="complaint">Chief Complaint</label>
+                <br />
+                <input style={{ marginTop: 16, width: '100%' }}
+                  id="complaint"
+                  className="input"
+                  type="text"
+                  placeholder="Guide: 'Fever'"
+                  value={form.complaint}
+                  onChange={e => setField('complaint', e.target.value)}
+                  required
+
+                />
+                <div style={{ marginTop: 10, fontSize: 13, color: 'var(--muted)' }}>
+                  Short statement of the main reason for visit. Keep it concise — location, duration, and key descriptor.
+                </div>
               </div>
-              <div className="card" style={{ marginBottom: '12px' }}>
+
+              {/* HPI */}
+              <div className="card" style={{ marginBottom: 12 }}>
                 <label className="label-muted">History of Present Illness (HPI)</label>
-                <textarea id="hpi" style={{ width: '100%', resize: 'vertical', padding: '8px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.06)', fontFamily: 'inherit' }} rows="6" placeholder="Describe the HPI..." value={form.hpi} onChange={handleChange}></textarea>
+                <textarea 
+                  value={form.hpi}
+                  onChange={e => setField('hpi', e.target.value)}
+                  rows="8"
+                  style={{ width: '100%', marginTop: 16, padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', fontFamily: 'inherit' }}
+                  placeholder={
+`Guide:
+- Onset: when symptoms started
+- Location: where
+- Duration: continuous/intermittent, how long
+- Character: sharp, dull, throbbing
+- Aggravating/relieving factors
+- Associated symptoms (nausea, cough, shortness of breath)`
+                } />
+                <div style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)' }}>
+                  Write a brief narrative focused on the current problem — timing, severity, modifiers, and associated symptoms.
+                </div>
               </div>
-              <div className="card" style={{ marginBottom: '12px' }}>
+
+              {/* Physical Exam */}
+              <div className="card" style={{ marginBottom: 12 }}>
                 <label className="label-muted">Physical Exam</label>
-                <textarea id="exam" style={{ width: '100%', resize: 'vertical', padding: '8px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.06)', fontFamily: 'inherit' }} rows="4" placeholder="Findings..." value={form.exam} onChange={handleChange}></textarea>
+                <textarea
+                  value={form.exam}
+                  onChange={e => setField('exam', e.target.value)}
+                  rows="6"
+                  style={{ width: '100%', marginTop: 16, padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', fontFamily: 'inherit' }}
+                  placeholder={
+`Guide:
+- General appearance (well, distressed)
+- Vital signs summary (if relevant)
+- Focused systems: e.g., ENT: pharynx erythematous; Lungs: clear; Abdomen: soft, non-tender.`
+                } />
+                <div style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)' }}>
+                  Record objective findings from the physical exam — be concise and system-focused.
+                </div>
               </div>
-              <div className="card" style={{ marginBottom: '12px' }}>
+
+              {/* Assessment / Plan */}
+              <div className="card" style={{ marginBottom: 12 }}>
                 <label className="label-muted">Assessment / Plan</label>
-                <textarea id="plan" style={{ width: '100%', resize: 'vertical', padding: '8px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.06)', fontFamily: 'inherit' }} rows="4" placeholder="Assessment and plan..." value={form.plan} onChange={handleChange}></textarea>
+                <textarea
+                  value={form.plan}
+                  onChange={e => setField('plan', e.target.value)}
+                  rows="4"
+                  style={{ width: '100%', marginTop: 16, padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', fontFamily: 'inherit' }}
+                  placeholder={
+`Guide:
+- Assessment: likely diagnoses (differentials if needed)
+- Plan: investigations, medications, advice, follow-up`
+                } />
+                <div style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)' }}>
+                  State your impression and the concrete next steps (tests, prescriptions, referrals, safety-netting).
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn" onClick={saveDraft}>Save Draft</button>
-                <button type="submit" className="btn">Save & Sign</button>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button type="submit" className="btn" disabled={isSaving || !form.patient || !form.complaint}>
+                  {isSaving ? 'Saving…' : 'Save Encounter'}
+                </button>
               </div>
             </div>
+
             <aside>
-              <div className="card" style={{ marginBottom: '12px' }}>
+              {/* Vitals */}
+              <div className="card" style={{ marginBottom: 12 }}>
                 <h3 style={{ margin: '0 0 8px 0' }}>Vitals</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <input id="temp" className="input" placeholder="Temp" value={form.temp} onChange={handleChange} />
-                  <input id="pulse" className="input" placeholder="Pulse" value={form.pulse} onChange={handleChange} />
-                  <input id="bp" className="input" placeholder="BP" value={form.bp} onChange={handleChange} />
-                  <input id="weight" className="input" placeholder="Weight" value={form.weight} onChange={handleChange} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input
+                    className="input"
+                    placeholder="Temperature (°C) — e.g., 37.8"
+                    value={form.temp}
+                    onChange={e => setField('temp', e.target.value)}
+                    inputMode="decimal"
+                  />
+                  <input
+                    className="input"
+                    placeholder="Pulse (bpm) — e.g., 80"
+                    value={form.pulse}
+                    onChange={e => setField('pulse', e.target.value)}
+                    inputMode="numeric"
+                  />
+                  <input
+                    className="input"
+                    placeholder="BP — e.g., 120/80"
+                    value={form.bp}
+                    onChange={e => setField('bp', e.target.value)}
+                  />
+                  <input
+                    className="input"
+                    placeholder="Weight (kg) — optional"
+                    value={form.weight}
+                    onChange={e => setField('weight', e.target.value)}
+                    inputMode="decimal"
+                  />
+                </div>
+                <div style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)' }}>
+                  Record the most recent / measured vitals. Use numbers only.
                 </div>
               </div>
-              <div className="card" style={{ marginBottom: '12px' }}>
+
+              {/* Metadata */}
+              <div className="card" style={{ marginBottom: 12 }}>
                 <h3 style={{ margin: '0 0 8px 0' }}>Metadata</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <select id="visitType" className="input" value={form.visitType} onChange={handleChange}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <select className="input" value={form.visitType} onChange={e => setField('visitType', e.target.value)}>
                     <option>Walk-in</option>
                     <option>Scheduled</option>
                     <option>Follow-up</option>
                   </select>
-                  <div style={{ padding: '8px', borderRadius: '8px', background: 'var(--panel)', border: '1px solid rgba(0,0,0,0.06)' }}>
+
+                  <div style={{ padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }}>
                     Clinician: <strong>{form.clinician || 'Not logged in'}</strong>
                   </div>
-                  <input id="date" className="input" type="datetime-local" value={form.date} onChange={handleChange} />
+
+                  <input className="input" type="datetime-local" value={form.date} onChange={e => setField('date', e.target.value)} />
                 </div>
               </div>
-              <div className="card">
-                <h3 style={{ margin: '0 0 8px 0' }}>Attachments</h3>
-                <input type="file" onChange={handleFileChange} />
+
+              {/* Removed attachments per request */}
+              <div className="card" style={{ padding: 12, fontSize: 13, color: 'var(--muted)' }}>
+                <strong>Notes on documentation</strong>
+                <ul style={{ margin: '8px 0 0 18px' }}>
+                  <li>Keep entries clear and objective.</li>
+                  <li>Use short sentences — include time/duration when relevant.</li>
+                  <li>Write plans that are actionable (med + dose + frequency + duration).</li>
+                </ul>
               </div>
             </aside>
           </form>
         </div>
       </section>
-      {showSuccessModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '20px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-            maxWidth: '400px',
-            textAlign: 'center'
-          }}>
-            <p>Encounter saved successfully.</p>
-            <button className="btn" onClick={() => setShowSuccessModal(false)}>OK</button>
-          </div>
-        </div>
-      )}
     </main>
   );
 };
