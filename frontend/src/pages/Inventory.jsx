@@ -6,10 +6,12 @@ const Inventory = () => {
   const [items, setItems] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState({
     item_name: '',
+    category: 'Medications',
     stock_quantity: '',
     unit: 'pcs',
     reorder_level: '10'
@@ -48,7 +50,8 @@ const Inventory = () => {
 
 
   const filteredItems = items.filter(item =>
-    search === '' || item.item_name.toLowerCase().includes(search.toLowerCase())
+    (search === '' || item.item_name.toLowerCase().includes(search.toLowerCase())) &&
+    (selectedCategory === 'All' || item.category === selectedCategory)
   );
 
   const reorderItems = items.filter(item => item.stock_quantity < item.reorder_level);
@@ -96,6 +99,7 @@ const Inventory = () => {
     try {
       const { error } = await supabase.from('inventory').insert([{
         item_name: newItem.item_name.trim(),
+        category: newItem.category,
         stock_quantity: stockQty,
         unit: newItem.unit,
         reorder_level: reorderLvl
@@ -128,6 +132,7 @@ const Inventory = () => {
         setShowAddModal(false);
         setNewItem({
           item_name: '',
+          category: 'Medications',
           stock_quantity: '',
           unit: 'pcs',
           reorder_level: '10'
@@ -238,22 +243,36 @@ const Inventory = () => {
                 <button className="btn" onClick={addStock}>Add Stock</button>
               </div>
             </div>
-            <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginBottom: '12px', display: 'flex', gap: '10px' }}>
               <input
                 id="inventory-search"
                 className="input"
                 type="search"
                 placeholder="Search inventory (item name)"
-                style={{ width: '100%', maxWidth: '400px' }}
+                style={{ flex: 1 }}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              <select
+                className="input"
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                style={{ minWidth: '120px' }}
+              >
+                <option value="All">All Categories</option>
+                <option value="Medications">Medications</option>
+                <option value="Diagnostic Equipment">Diagnostic Equipment</option>
+                <option value="PPE">PPE</option>
+                <option value="Consumables">Consumables</option>
+                <option value="First Aid / Disinfectants">First Aid / Disinfectants</option>
+              </select>
             </div>
             <div style={{ overflow: 'auto' }}>
               <table className="table" aria-label="Inventory table">
                 <thead>
                   <tr>
                     <th>Item</th>
+                    <th>Category</th>
                     <th>Stock</th>
                     <th>Unit</th>
                     <th>Reorder Level</th>
@@ -265,6 +284,7 @@ const Inventory = () => {
                   {filteredItems.map(item => (
                     <tr key={item.id}>
                       <td>{item.item_name}</td>
+                      <td>{item.category}</td>
                       <td>{item.stock_quantity}</td>
                       <td>{item.unit}</td>
                       <td className="label-muted">{item.reorder_level}</td>
@@ -363,6 +383,21 @@ const Inventory = () => {
                   placeholder="Enter item name"
                   required
                 />
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <label>Category:</label>
+                <select
+                  name="category"
+                  className="input"
+                  value={newItem.category}
+                  onChange={handleNewItemChange}
+                >
+                  <option value="Medications">Medications</option>
+                  <option value="Diagnostic Equipment">Diagnostic Equipment</option>
+                  <option value="PPE">PPE</option>
+                  <option value="Consumables">Consumables</option>
+                  <option value="First Aid / Disinfectants">First Aid / Disinfectants</option>
+                </select>
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <label>Stock Quantity:</label>
