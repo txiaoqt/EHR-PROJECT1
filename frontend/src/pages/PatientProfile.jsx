@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// src/pages/PatientProfile.jsx
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { Line } from 'react-chartjs-2';
@@ -12,6 +13,9 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import tupehrlogo from '../assets/images/tupehrlogo.jpg';
 
 ChartJS.register(
   CategoryScale,
@@ -28,229 +32,611 @@ const PatientProfile = () => {
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
   const id = searchParams.get('id') || (location.state && location.state.patientId);
+
   const [patient, setPatient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [encounters, setEncounters] = useState([]);
   const [vitalsHistory, setVitalsHistory] = useState([]);
-  const [attachments, setAttachments] = useState([]);
-  const [medications, setMedications] = useState([]);
-  const [notes, setNotes] = useState([]);
   const [vitalsData, setVitalsData] = useState(null);
+
+  // edit states
   const [editingMedications, setEditingMedications] = useState(false);
   const [editingAllergies, setEditingAllergies] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
-  const [editingAttachments, setEditingAttachments] = useState(false);
+
   const [newMedications, setNewMedications] = useState('');
   const [newAllergies, setNewAllergies] = useState('');
   const [newNotes, setNewNotes] = useState('');
-  const [selectedFiles, setSelectedFiles] = useState([]);
+
+  // UI states
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null); // { type: 'success'|'error', text }
+  const [showMore, setShowMore] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [previewSrc, setPreviewSrc] = useState(null);
+  const [previewType, setPreviewType] = useState(null);
+  const pdfExportRef = useRef(); // hidden export container
 
   useEffect(() => {
+    let mounted = true;
     if (id) {
       const fetchData = async () => {
-        // Fetch patient
-        const { data: patientData, error: patientError } = await supabase.from('patients').select('id, name, year, created_at, updated_at, last_visit_date').eq('id', id).single();
-        if (!patientError) {
-          setPatient(patientData);
-        } else {
-          console.error('Error fetching patient:', patientError);
+        setLoading(true);
+        try {
+          // patient
+          const { data: patientData, error: patientError } = await supabase
+            .from('patients')
+            .select('id, name, year, created_at, updated_at, last_visit_date, medications, allergies, notes')
+            .eq('id', id)
+            .single();
+
+          if (patientError) console.error('Error fetching patient:', patientError);
+          if (mounted && patientData) {
+            setPatient(patientData);
+            setNewMedications(patientData.medications || '');
+            setNewAllergies(patientData.allergies || '');
+            setNewNotes(patientData.notes || '');
+          }
+
+          // encounters
+          const { data: encData } = await supabase
+            .from('encounters')
+            .select('*')
+            .eq('patient_id', id)
+            .order('created_at', { ascending: false });
+          if (mounted) setEncounters(encData || []);
+
+          // vitals history from encounters
+          const { data: vitalsEncData } = await supabase
+            .from('encounters')
+            .select('encounter_date, vitals')
+            .eq('patient_id', id)
+            .not('vitals', 'is', null)
+            .order('encounter_date', { ascending: true });
+
+          const vitals = (vitalsEncData || []).map(enc => ({ date: enc.encounter_date, ...enc.vitals }));
+          if (mounted) {
+            setVitalsHistory(vitals);
+            if (vitals.length > 0) {
+              const labels = vitals.map(v => new Date(v.date).toLocaleDateString());
+              setVitalsData({
+                labels,
+                datasets: [
+                  {
+                    label: 'Temperature (°C)',
+                    data: vitals.map(v => v.temp ?? null),
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    tension: 0.1,
+                    spanGaps: true
+                  },
+                  {
+                    label: 'Pulse (bpm)',
+                    data: vitals.map(v => v.pulse ?? null),
+                    borderColor: 'rgb(54, 162, 235)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    tension: 0.1,
+                    spanGaps: true
+                  }
+                ]
+              });
+            } else {
+              setVitalsData(null);
+            }
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          if (mounted) setLoading(false);
         }
-
-        // Fetch encounters
-        const { data: encData } = await supabase.from('encounters').select('*').eq('patient_id', id).order('created_at', { ascending: false });
-        setEncounters(encData || []);
-
-        // Fetch encounters with vitals for history
-        const { data: vitalsEncData } = await supabase.from('encounters').select('encounter_date, vitals').eq('patient_id', id).not('vitals', 'is', null).order('encounter_date', { ascending: true });
-        const vitals = vitalsEncData.map(enc => ({ date: enc.encounter_date, ...enc.vitals }));
-        setVitalsHistory(vitals);
-
-        // Prepare chart data
-        if (vitals.length > 0) {
-          const labels = vitals.map(v => new Date(v.date).toLocaleDateString());
-          const temps = vitals.map(v => v.temp).filter(t => t);
-          const pulses = vitals.map(v => v.pulse).filter(p => p);
-          setVitalsData({
-            labels,
-            datasets: [
-              {
-                label: 'Temperature (°C)',
-                data: temps,
-                borderColor: 'rgb(255, 99, 132)',
-                backgroundColor: 'rgba(255, 99, 132, 0.5)',
-                tension: 0.1
-              },
-              {
-                label: 'Pulse (bpm)',
-                data: pulses,
-                borderColor: 'rgb(54, 162, 235)',
-                backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                tension: 0.1
-              }
-            ]
-          });
-        }
-
-        setLoading(false);
       };
       fetchData();
     } else {
       setLoading(false);
     }
+    return () => { mounted = false; };
   }, [id]);
 
+  // small toast helper
+  const showToast = (text, type = 'success') => {
+    setToast({ text, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
   const saveData = async (field, value) => {
+    setSaving(true);
     try {
       const { error } = await supabase.from('patients').update({ [field]: value }).eq('id', id);
-      if (!error) {
-        setPatient(prev => ({ ...prev, [field]: value }));
+      if (error) {
+        console.error('Error saving', field, error);
+        showToast(`Error saving ${field}`, 'error');
       } else {
-        alert(`Error saving ${field}: ${error.message}`);
+        setPatient(prev => ({ ...prev, [field]: value }));
+        showToast(`${field.charAt(0).toUpperCase() + field.slice(1)} saved`);
       }
     } catch (err) {
-      alert(`Error saving ${field}: Column may not exist in database. Please add the column via SQL: ALTER TABLE patients ADD COLUMN ${field} TEXT;`);
+      console.error(err);
+      showToast('Save failed', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleSaveAttachments = async () => {
-    const uploadedUrls = [];
-    for (const file of selectedFiles) {
-      const fileName = `${id}/${Date.now()}-${file.name}`;
-      const { data, error } = await supabase.storage.from('attachments').upload(fileName, file);
-      if (!error) {
-        const { data: url } = supabase.storage.from('attachments').getPublicUrl(fileName);
-        uploadedUrls.push(url.publicUrl);
+  const handleDeletePatient = async () => {
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from('patients').delete().eq('id', id);
+      if (error) {
+        console.error('Error deleting patient', error);
+        showToast('Error deleting patient', 'error');
+      } else {
+        showToast('Patient deleted', 'success');
+        navigate('/patients');
       }
+    } catch (err) {
+      console.error(err);
+      showToast('Delete failed', 'error');
+    } finally {
+      setDeleting(false);
+      setShowDeleteModal(false);
     }
-    const newAttachments = [...(patient.attachments || []), ...uploadedUrls];
-    await saveData('attachments', newAttachments);
-    setEditingAttachments(false);
-    setSelectedFiles([]);
   };
+
+  const download = (url) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = url.split('/').pop();
+    a.click();
+  };
+
+  const openPreview = (url) => {
+    const ext = url.split('.').pop().toLowerCase();
+    const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    if (imageExts.includes(ext)) setPreviewType('image');
+    else setPreviewType('embed');
+    setPreviewSrc(url);
+  };
+
+  // SmallBtn now renders className="btn" (uniform)
+  const SmallBtn = ({ onClick, children, disabled = false }) => (
+    <button className="btn" onClick={onClick} disabled={disabled} type="button">
+      {children}
+    </button>
+  );
+
+  // navigation helpers
+  const goToNewVitals = () => {
+    navigate('/vitals', { state: { patientId: id, patientName: patient?.name } });
+  };
+
+  const goToNewEncounter = () => {
+    navigate('/encounter', { state: { patientId: id, patientName: patient?.name } });
+  };
+
+  // ------------------ PDF Export ------------------
+  const exportPdf = async () => {
+    if (!patient) return;
+    try {
+      const exportNode = pdfExportRef.current;
+      if (!exportNode) {
+        showToast('Export failed: export node missing', 'error');
+        return;
+      }
+
+      // wait for images (logo) to load
+      const imgs = Array.from(exportNode.querySelectorAll('img'));
+      await Promise.all(imgs.map(img => {
+        return new Promise(resolve => {
+          if (img.complete) return resolve();
+          img.onload = img.onerror = () => resolve();
+        });
+      }));
+
+      const scale = 2;
+      const canvas = await html2canvas(exportNode, {
+        scale,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        windowWidth: exportNode.scrollWidth,
+        windowHeight: exportNode.scrollHeight
+      });
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      const ratio = pageWidth / canvasWidth;
+      const renderedHeight = canvasHeight * ratio;
+
+      if (renderedHeight <= pageHeight) {
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, renderedHeight);
+      } else {
+        let y = 0;
+        const pxPerPage = Math.floor(pageHeight / ratio);
+        while (y < canvasHeight) {
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = canvasWidth;
+          pageCanvas.height = Math.min(pxPerPage, canvasHeight - y);
+          const ctx = pageCanvas.getContext('2d');
+          ctx.drawImage(canvas, 0, y, canvasWidth, pageCanvas.height, 0, 0, canvasWidth, pageCanvas.height);
+          const pageData = pageCanvas.toDataURL('image/jpeg', 0.95);
+          if (y > 0) pdf.addPage();
+          const h = pageCanvas.height * ratio;
+          pdf.addImage(pageData, 'JPEG', 0, 0, pageWidth, h);
+          y += pxPerPage;
+        }
+      }
+
+      pdf.save(`patient_${patient.id}_profile.pdf`);
+      showToast('PDF exported');
+    } catch (err) {
+      console.error('Export error', err);
+      showToast('Export failed', 'error');
+    }
+  };
+  // ------------------ end PDF Export ------------------
 
   if (loading) return <main className="main"><div className="card">Loading...</div></main>;
-
   if (!patient) return <main className="main"><div className="card">Patient not found.</div></main>;
 
   return (
-    <main className="main">
-      <section className="page" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div className="card">
-          <h2>Patient Profile</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div><strong>Name:</strong> {patient.name}</div>
-            <div><strong>Student ID:</strong> {patient.id}</div>
-            <div><strong>Year:</strong> {patient.year}</div>
-            <div><strong>Last Visit:</strong> {patient.last_visit_date}</div>
-          </div>
-          <button className="btn" onClick={() => navigate('/patients')}>Back</button>
-        </div>
+    <>
+      <main className="main">
+        <section className="page" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Clinic header + patient details + actions */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Clinic Header */}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                
+                  <div style={{ fontSize: 25, fontWeight: 700, marginTop: 10}}>Patient’s Profile</div>
+                
+              </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <div className="card">
-            <h3>Encounters</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {encounters.length > 0 ? encounters.map(enc => (
-                <div key={enc.id} style={{ padding: '8px', border: '1px solid var(--muted)', borderRadius: '4px' }}>
-                  <div><strong>Date:</strong> {new Date(enc.encounter_date).toLocaleDateString()}</div>
-                  <div><strong>Complaint:</strong> {enc.chief_complaint || 'N/A'}</div>
-                  <div><strong>Assessment:</strong> {enc.assessment_plan || 'N/A'}</div>
-                </div>
-              )) : <div>No encounters found.</div>}
-            </div>
-            <button className="btn" onClick={() => navigate('/encounter', { state: { patientId: id } })}>New Encounter</button>
-          </div>
+              {/* actions group in header */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="btn" onClick={() => navigate('/patients')}>← Back</button>
 
-          <div className="card">
-            <h3>Vitals History</h3>
-            {vitalsData ? <Line data={vitalsData} /> : <div>No vitals history.</div>}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' }}>
-              {vitalsHistory.map((vital, index) => (
-                <div key={index} style={{ padding: '4px', borderBottom: '1px solid #eee' }}>
-                  <strong>{new Date(vital.date).toLocaleDateString()}:</strong> Temp: {vital.temp}°, Pulse: {vital.pulse} bpm, BP: {vital.bp}, Weight: {vital.weight} kg
-                </div>
-              ))}
-            </div>
-          </div>
+                <div style={{ position: 'relative' }}>
+                  <button className="btn" onClick={() => setShowMore(s => !s)} aria-haspopup="true" aria-expanded={showMore}>⋯</button>
 
-          <div className="card">
-            <h3>Medications / Allergies</h3>
-            <div>
-              <h4>Medications:</h4>
-              {editingMedications ? (
-                <div>
-                  <textarea value={newMedications} onChange={(e) => setNewMedications(e.target.value)} style={{ width: '100%', minHeight: '60px' }} />
-                  <button className="btn" onClick={() => { saveData('medications', newMedications); setEditingMedications(false); }}>Save</button>
-                  <button className="btn" onClick={() => setEditingMedications(false)}>Cancel</button>
+                  {showMore && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        top: 'calc(100% + 8px)',
+                        background: 'var(--panel)',
+                        boxShadow: '0 10px 28px rgba(0,0,0,0.14)',
+                        borderRadius: 10,
+                        padding: 8,
+                        zIndex: 300,
+                        minWidth: 180
+                      }}
+                      role="menu"
+                    >
+                      <button
+                        className="btn"
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', textAlign: 'left', color: 'inherit' }}
+                        onClick={() => { setShowMore(false); exportPdf(); }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Export PDF
+                      </button>
+
+                      <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '6px 0' }} />
+
+                      <button
+                        className="btn"
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', textAlign: 'left', color: 'var(--danger)' }}
+                        onClick={() => { setShowMore(false); setShowDeleteModal(true); }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        Delete patient
+                      </button>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div onClick={() => setEditingMedications(true)} style={{ cursor: 'pointer' }}>
-                  {patient.medications || 'None'}
-                </div>
-              )}
+              </div>
             </div>
-            <div>
-              <h4>Allergies:</h4>
-              {editingAllergies ? (
-                <div>
-                  <textarea value={newAllergies} onChange={(e) => setNewAllergies(e.target.value)} style={{ width: '100%', minHeight: '60px' }} />
-                  <button className="btn" onClick={() => { saveData('allergies', newAllergies); setEditingAllergies(false); }}>Save</button>
-                  <button className="btn" onClick={() => setEditingAllergies(false)}>Cancel</button>
-                </div>
-              ) : (
-                <div onClick={() => setEditingAllergies(true)} style={{ cursor: 'pointer' }}>
-                  {patient.allergies || 'None'}
-                </div>
-              )}
+
+            {/* Patient Details */}
+            <div style={{ marginTop: 4, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div><strong>Name:</strong> {patient.name}</div>
+              <div><strong>TUP ID:</strong> {patient.id}</div>
+              <div><strong>Year:</strong> {patient.year}</div>
+              <div><strong>Last Visit:</strong> {patient.last_visit_date || '—'}</div>
             </div>
           </div>
 
-          <div className="card">
-            <h3>Attachments & Scans</h3>
-            {editingAttachments ? (
+          {/* Main grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {/* encounters */}
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <h3 style={{ margin: 0 }}>Encounters</h3>
+                <button className="btn" onClick={goToNewEncounter}> New</button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {encounters.length > 0 ? encounters.map(enc => (
+                  <div key={enc.id} style={{ padding: 10, border: '1px solid rgba(0,0,0,0.05)', borderRadius: 8 }}>
+                    <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+                      {new Date(enc.encounter_date).toLocaleDateString()}
+                    </div>
+                    <div style={{ fontWeight: 600 }}>{enc.chief_complaint || 'No complaint recorded'}</div>
+                    <div style={{ color: 'var(--muted)', fontSize: 13 }}>{enc.assessment_plan || ''}</div>
+                  </div>
+                )) : <div style={{ color: 'var(--muted)' }}>No encounters found — create a new encounter.</div>}
+              </div>
+            </div>
+
+            {/* vitals */}
+            <div className="card" style={{ minHeight: 260 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <h3 style={{ margin: 0 }}>Vitals</h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  
+                </div>
+              </div>
+
+              <div style={{ height: 220 }}>
+                {vitalsData ? (
+                  <Line
+                    data={vitalsData}
+                    options={{
+                      maintainAspectRatio: false,
+                      plugins: { legend: { position: 'top' } },
+                      scales: { x: { ticks: { maxRotation: 0 } } }
+                    }}
+                  />
+                ) : <div style={{ color: 'var(--muted)' }}>No vitals history.</div>}
+              </div>
+
+              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {vitalsHistory.map((vital, i) => (
+                  <div key={i} style={{ padding: 8, borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                    <strong>{new Date(vital.date).toLocaleDateString()}</strong>
+                    <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+                      Temp: {vital.temp ?? '—'} °C · Pulse: {vital.pulse ?? '—'} bpm · BP: {vital.bp ?? '—'} · Wt: {vital.weight ?? '—'} kg
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* medications / allergies */}
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <h3 style={{ margin: 0 }}>Medications / Allergies</h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn" onClick={() => setEditingMedications(e => !e)}>{editingMedications ? 'Edit Meds' : 'Edit Meds'}</button>
+                  <button className="btn" onClick={() => setEditingAllergies(e => !e)}>{editingAllergies ? 'Edit Allergies' : 'Edit Allergies'}</button>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <h4 style={{ margin: '6px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Medications</span>
+                  {editingMedications && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn" onClick={() => { setEditingMedications(false); setNewMedications(patient.medications || ''); }}>Cancel</button>
+                      <button className="btn" onClick={async () => { await saveData('medications', newMedications); setEditingMedications(false); }} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+                    </div>
+                  )}
+                </h4>
+
+                {editingMedications ? (
+                  <textarea value={newMedications} onChange={(e) => setNewMedications(e.target.value)} style={{ width: '100%', minHeight: 80 }} />
+                ) : (
+                  <div style={{ whiteSpace: 'pre-wrap', padding: 8, borderRadius: 6, background: '#fafafa' }}>
+                    {patient.medications || <span style={{ color: 'var(--muted)' }}>No medications listed — click Edit Meds to add</span>}
+                  </div>
+                )}
+              </div>
+
               <div>
-                <input
-                  type="file"
-                  multiple
-                  onChange={(e) => setSelectedFiles(Array.from(e.target.files))}
-                  style={{ width: '100%' }}
-                />
-                <button className="btn" onClick={handleSaveAttachments}>Save</button>
-                <button className="btn" onClick={() => setEditingAttachments(false)}>Cancel</button>
+                <h4 style={{ margin: '6px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Allergies</span>
+                  {editingAllergies && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn" onClick={() => { setEditingAllergies(false); setNewAllergies(patient.allergies || ''); }}>Cancel</button>
+                      <button className="btn" onClick={async () => { await saveData('allergies', newAllergies); setEditingAllergies(false); }} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+                    </div>
+                  )}
+                </h4>
+
+                {editingAllergies ? (
+                  <textarea value={newAllergies} onChange={(e) => setNewAllergies(e.target.value)} style={{ width: '100%', minHeight: 80 }} />
+                ) : (
+                  <div style={{ whiteSpace: 'pre-wrap', padding: 8, borderRadius: 6, background: '#fafafa' }}>
+                    {patient.allergies || <span style={{ color: 'var(--muted)' }}>No allergies listed — click Edit Allergies to add</span>}
+                  </div>
+                )}
               </div>
-            ) : (
-              <div onClick={() => setEditingAttachments(true)} style={{ cursor: 'pointer' }}>
-                {patient.attachments && patient.attachments.length > 0 ? (
-                  <ul>
-                    {patient.attachments.map((att, index) => (
-                      <li key={index}>
-                        <a href={att} target="_blank" rel="noopener noreferrer">{att.split('/').pop()}</a>
-                      </li>
-                    ))}
-                  </ul>
-                ) : 'None'}
-                <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Click to upload new files</div>
+            </div>
+
+            {/* NOTES card */}
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>Notes</h3>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn" onClick={() => setEditingNotes(e => !e)}>{editingNotes ? 'Done' : 'Edit'}</button>
+                </div>
               </div>
-            )}
+
+              <div style={{ marginTop: 12 }}>
+                {editingNotes ? (
+                  <>
+                    <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} style={{ width: '100%', minHeight: 140 }} />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                      <button className="btn" onClick={() => { setEditingNotes(false); setNewNotes(patient.notes || ''); }}>Cancel</button>
+                      <button className="btn" onClick={async () => { await saveData('notes', newNotes); setEditingNotes(false); }} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ whiteSpace: 'pre-wrap', padding: 12, borderRadius: 8, background: '#f9f9f9', minHeight: 120 }}>
+                    {patient.notes || <span style={{ color: 'var(--muted)' }}>No notes or messages — click Edit to add</span>}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="card" style={{ gridColumn: 'span 2' }}>
-            <h3>Notes / Messages</h3>
-            {editingNotes ? (
+          {/* toast */}
+          {toast && (
+            <div style={{
+              position: 'fixed',
+              top: 20,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 2000,
+              padding: '10px 16px',
+              borderRadius: 8,
+              color: 'white',
+              fontWeight: 700,
+              backgroundColor: toast.type === 'error' ? '#dc3545' : '#28a745',
+              boxShadow: '0 6px 18px rgba(0,0,0,0.15)'
+            }}>
+              {toast.text}
+            </div>
+          )}
+
+          {/* preview modal */}
+          {previewSrc && (
+            <div style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000
+            }}>
+              <div style={{ width: '90%', maxWidth: 960, background: 'var(--panel)', borderRadius: 8, padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <strong>Preview</strong>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn" onClick={() => download(previewSrc)}>Download</button>
+                    <button className="btn" onClick={() => { setPreviewSrc(null); setPreviewType(null); }}>Close</button>
+                  </div>
+                </div>
+                <div style={{ height: '70vh', overflow: 'auto' }}>
+                  {previewType === 'image' ? (
+                    <img src={previewSrc} alt="preview" style={{ maxWidth: '100%', maxHeight: '100%', display: 'block', margin: '0 auto' }} />
+                  ) : (
+                    <iframe src={previewSrc} title="Preview" style={{ width: '100%', height: '100%', border: 'none' }} />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* delete modal */}
+          {showDeleteModal && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 420, background: 'var(--panel)', padding: 18, borderRadius: 8 }}>
+                <h3 style={{ marginTop: 0 }}>Delete patient record</h3>
+                <div style={{ color: 'var(--muted)', marginBottom: 12 }}>
+                  Are you sure you want to delete <strong>{patient.name}</strong> ({patient.id})? This action cannot be undone.
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button className="btn" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+                  <button className="btn" onClick={handleDeletePatient} disabled={deleting} style={{ background: 'var(--danger)', color: '#fff' }}>
+                    {deleting ? 'Deleting…' : 'Yes, delete'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      </main>
+
+      {/* Hidden export container for PDF */}
+      <div style={{ position: 'absolute', left: -9999, top: -9999, width: 794, padding: 24, background: '#fff' }} aria-hidden ref={pdfExportRef}>
+        <div style={{ width: '100%', background: '#fff', color: '#111', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+          {/* Header: logo + clinic title */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+            <img src={tupehrlogo} alt="TUP Clinic logo" style={{ width: 100, height: 'auto', objectFit: 'contain' }} />
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>Technological University of the Philippines (TUP) Manila – Clinic</div>
+              <div style={{ marginTop: 6, fontSize: 16, fontWeight: 700 }}>Patient's Profile</div>
+            </div>
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #ddd', marginBottom: 12 }} />
+
+          {/* Patient summary */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Patient's Name:</div>
+            <div style={{ marginBottom: 8 }}>{patient.name}</div>
+
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>TUP ID:</div>
+            <div style={{ marginBottom: 8 }}>{patient.id}</div>
+
               <div>
-                <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} style={{ width: '100%', minHeight: '100px' }} />
-                <button className="btn" onClick={() => { saveData('notes', newNotes); setEditingNotes(false); }}>Save</button>
-                <button className="btn" onClick={() => setEditingNotes(false)}>Cancel</button>
+                <div style={{ fontWeight: 700 }}>Year:</div>
+                <div>{patient.year}</div>
               </div>
-            ) : (
-              <div onClick={() => setEditingNotes(true)} style={{ cursor: 'pointer', padding: '8px', border: '1px solid #ccc', borderRadius: '4px', background: '#f9f9f9' }}>
-                {patient.notes || 'No notes or messages.'}
+              
+              <div>
+                <div style={{ fontWeight: 700 }}>Last visit:</div>
+                <div>{patient.last_visit_date || '—'}</div>
               </div>
-            )}
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
+
+          {/* Encounters */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Encounters</div>
+            {encounters.length > 0 ? encounters.map((enc, i) => (
+              <div key={i} style={{ marginBottom: 8 }}>
+                <div style={{ fontWeight: 700 }}>{new Date(enc.encounter_date).toLocaleDateString()}</div>
+                <div><strong>Complaint:</strong> {enc.chief_complaint || 'N/A'}</div>
+                <div><strong>Assessment/Plan:</strong> {enc.assessment_plan || 'N/A'}</div>
+              </div>
+            )) : <div style={{ color: '#666' }}>No encounters recorded.</div>}
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
+
+          {/* Vitals */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Vitals History</div>
+            {vitalsHistory.length > 0 ? vitalsHistory.map((v, i) => (
+              <div key={i} style={{ marginBottom: 6 }}>
+                <div style={{ fontWeight: 700 }}>{new Date(v.date).toLocaleDateString()}</div>
+                <div>Temp: {v.temp ?? '—'} °C · Pulse: {v.pulse ?? '—'} bpm · BP: {v.bp ?? '—'} · Wt: {v.weight ?? '—'} kg</div>
+              </div>
+            )) : <div style={{ color: '#666' }}>No vitals recorded.</div>}
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
+
+          {/* Meds & Allergies */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Medications</div>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{patient.medications || 'None'}</div>
+
+            <div style={{ marginTop: 8, fontSize: 14, fontWeight: 800 }}>Allergies</div>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{patient.allergies || 'None'}</div>
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
+
+          {/* Notes */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Notes</div>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{patient.notes || 'No notes'}</div>
+          </div>
+
+          <div style={{ marginTop: 20, color: '#666', fontSize: 12 }}>
+            Exported from EHR system
           </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </>
   );
 };
 
