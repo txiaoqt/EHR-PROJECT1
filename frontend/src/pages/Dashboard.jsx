@@ -244,25 +244,22 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
   }, [fetchDashboardData]);
 
   useEffect(() => {
-    const fetchLowStock = async () => {
-      const { data: lowStock, error } = await supabase
-        .from('inventory')
-        .select('item_name, stock_quantity, reorder_level')
-        .lt('stock_quantity', 15);
-      if (!error && lowStock) {
-        setLowStockItems(lowStock);
-        if (lowStock.length > 0 && !showLowStockAlert && !alertShown) {
-          setShowLowStockAlert(true);
-          setAlertShown(true);
-          const today = new Date().toDateString();
-          localStorage.setItem('lowStockAlertShown', today);
-        }
-      }
-    };
-    fetchLowStock();
-    const pollInterval = setInterval(fetchLowStock, 30000); // Check every 30 seconds
-    return () => clearInterval(pollInterval);
-  }, [showLowStockAlert]);
+  const fetchLowStock = async () => {
+    const { data: inventory, error } = await supabase
+      .from('inventory')
+      .select('id, item_name, stock_quantity, reorder_level, unit');
+    if (!error && inventory) {
+      const lowStock = inventory.filter(item =>
+        Number(item.stock_quantity) <= Number(item.reorder_level)
+      );
+      setLowStockItems(lowStock);      
+    }
+  };
+  fetchLowStock();
+  const pollInterval = setInterval(fetchLowStock, 30000);
+  return () => clearInterval(pollInterval);
+}, []);
+
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -457,16 +454,34 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
             <div className="card"><h3>Visits Over Time</h3>{visitsData && <Line data={visitsData} />}</div>
             <div className="card"><h3>Top 10 Chief Complaints</h3>{complaintsData && <Bar data={complaintsData} />}</div>
             <div className="card"><h3>Diagnoses Distribution</h3>{diagnosesData && <Pie data={diagnosesData} />}</div>
-            <div className="card"><h3>Vitals Quick View</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className="card" style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+              <h3 style={{ marginBottom: '12px' }}>Vitals Quick View</h3>
+              <div
+                className="vitals-scroll"
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
                 {vitalsData.map((vital, index) => (
-                  <div key={vital.id} style={{
-                    background: `hsl(${(index * 60) % 360}, 60%, 90%)`,
-                    padding: '8px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(0,0,0,0.1)'
-                  }}>
-                    <div><strong>{vital.name} - {vital.date}</strong></div>
+                  <div
+                    key={vital.id}
+                    style={{
+                      background: `hsl(${(index * 60) % 360}, 60%, 90%)`,
+                      padding: '8px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(0,0,0,0.1)',
+                    }}
+                  >
+                    <div>
+                      <strong>
+                        {vital.name} - {vital.date}
+                      </strong>
+                    </div>
                     <div style={{ display: 'flex', gap: '10px', fontSize: '12px' }}>
                       <span>Temp: {vital.temp}°</span>
                       <span>Pulse: {vital.pulse} bpm</span>

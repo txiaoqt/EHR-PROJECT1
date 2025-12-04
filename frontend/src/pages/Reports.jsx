@@ -18,6 +18,26 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import Chart from 'chart.js/auto';
 
+import logo from '../assets/images/tupehrlogo.jpg';
+
+const getBase64FromImg = (imgUrl) => {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.crossOrigin = 'Anonymous';
+    img.src = imgUrl;
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const dataURL = canvas.toDataURL('image/png');
+      resolve(dataURL);
+    };
+    img.onerror = reject;
+  });
+};
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -27,6 +47,33 @@ ChartJS.register(
   Tooltip,
   Legend
 );
+
+const fetchCensusData = async () => {
+  const { data: encounters, error: e1 } = await supabase
+    .from('encounters')
+    .select('id, patient_id, encounter_date, vitals, clinician_name, chief_complaint')  // <-- Added here
+    .not('vitals', 'is', null);
+
+  if (e1) throw e1;
+
+  const { data: students, error: e2 } = await supabase
+    .from('students')
+    .select('id, name');
+
+  if (e2) throw e2;
+
+  const studentMap = {};
+  students.forEach(s => { studentMap[s.id] = s.name; });
+
+  return encounters.map(enc => ({
+    ...enc,
+    name: studentMap[enc.patient_id] || enc.patient_id,
+    date: new Date(enc.encounter_date).toLocaleDateString(),
+    vitals: enc.vitals,
+    clinician_name: enc.clinician_name,
+    chief_complaint: enc.chief_complaint
+  }));
+};
 
 const Reports = () => {
   const [from, setFrom] = useState('');
@@ -38,15 +85,57 @@ const Reports = () => {
 
   const runReport = async () => {
     try {
+      if (type === 'census' && !from && !to) {
+        // Use the helper for initial census data
+        const censusData = await fetchCensusData();
+        setReportData(censusData);
+
+        // Chart for census (unchanged)
+        const monthCounts = {};
+        censusData.forEach(enc => {
+          const month = new Date(enc.encounter_date).toISOString().slice(0, 7);
+          monthCounts[month] = (monthCounts[month] || 0) + 1;
+        });
+        const sortedMonths = Object.keys(monthCounts).sort();
+        setChartData({
+          type: 'bar',
+          data: {
+            labels: sortedMonths.map(m => m.replace('-', '/')),
+            datasets: [{
+              label: 'Cases',
+              data: sortedMonths.map(m => monthCounts[m]),
+              backgroundColor: 'rgba(54, 162, 235, 0.6)',
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              title: { display: true, text: 'Monthly Case Counts' }
+            }
+          }
+        });
+        return;
+      }
+
+      const fromIso = from || '1970-01-01';
+
+      let toIso;
+      if (to) {
+        const toDateObj = new Date(to);
+        toDateObj.setHours(23, 59, 59, 999);  // Make "to" inclusive of the full day!
+        toIso = toDateObj.toISOString();
+      } else {
+        toIso = new Date().toISOString();
+      }
+
       const { data, error } = await supabase
         .from('encounters')
         .select('*')
-        .gte('encounter_date', from || '1970-01-01')
-        .lte('encounter_date', to || new Date().toISOString())
+        .gte('encounter_date', fromIso)
+        .lte('encounter_date', toIso)
         .order('encounter_date', { ascending: false });
 
       if (error) throw error;
-
       setReportData(data);
 
       if (type === 'census') {
@@ -133,9 +222,30 @@ const Reports = () => {
     }
   };
 
+
   // CSV exporter (kept local)
   const exportCsv = () => {
     if (!reportData) return;
+
+    if (type === 'census' && reportData[0] && reportData[0].vitals !== undefined) {
+      let csv = 'Name,Date,Vitals\n';
+      reportData.forEach(enc => {
+        const name = enc.name || enc.patient_id;
+        const date = enc.date || new Date(enc.encounter_date).toLocaleDateString();
+        const vitals = JSON.stringify(enc.vitals || {});
+        csv += `${name},${date},${vitals}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'census_report.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      setShowExportMenu(false);
+      return;
+    }
+
     let csv = 'Date,Patient,Clinician,Chief Complaint\n';
     reportData.forEach(enc => {
       csv += `${new Date(enc.encounter_date).toLocaleDateString()},${enc.patient_id},${enc.clinician_name},${(enc.chief_complaint || '').replace(/,/g, ' ')}\n`;
@@ -149,6 +259,7 @@ const Reports = () => {
     URL.revokeObjectURL(url);
     setShowExportMenu(false);
   };
+
 
 const createChartImage = async (config, width = 900, height = 450) => {
   // returns dataURL string like "data:image/png;base64,...."
@@ -281,133 +392,307 @@ const createChartImage = async (config, width = 900, height = 450) => {
 
   const exportPdf = async () => {
   if (!reportData || reportData.length === 0) return alert('No report data to export.');
-
   try {
-    // Build configs and derived tables
-    const { diagConfig, censusConfig, visitsConfig, diagEntries } = buildAllReportConfigs();
-
+    const logoBase64 = await getBase64FromImg(logo);
     const doc = new jsPDF('p', 'pt', 'a4');
-    const margin = 40;
-    let y = margin;
+    const headerMargin = 40;
+    const logoWidth = 54;
+    const logoHeight = 54;
+    let headerY = headerMargin;
+    doc.addImage(logoBase64, 'PNG', headerMargin, headerY, logoWidth, logoHeight);
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text('Technological University of the Philippines - Clinic', headerMargin + logoWidth + 16, headerY + 22);
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text(
+      `R e p o r t :  ${type === 'diagnoses' ? 'T O P  D I A G N O S E S' : type === 'census' ? 'C E N S U S' : 'V I S I T  T R E N D S'}  (${from || 'ALL'} - ${to || new Date().toISOString().slice(0,10)})`,
+      headerMargin + logoWidth + 16,
+      headerY + 38
+    );
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, headerMargin + logoWidth + 16, headerY + 53);
+    let y = Math.max(headerY + logoHeight, headerY + 54) + 14;
 
-    // Export only the selected report type
     if (type === 'diagnoses') {
-    
-      const imgWidth = doc.internal.pageSize.getWidth() - margin * 2;
-      const imgHeight = Math.round(imgWidth * 0.6); // keep aspect ratio
-
-      const diagImg = await createChartImage({
-        ...diagConfig,
-        options: {
-          // tweak legend and layout for clearer rendering
-          ...(diagConfig.options || {}),
-          plugins: {
-            ...(diagConfig.options?.plugins || {}),
-            legend: { position: 'top', labels: { boxWidth: 12 } }
-          },
-        }
-      }, imgWidth, imgHeight);
-
-      doc.setFontSize(14);
-      doc.text('Top Diagnoses', margin, y);
-      y += 8;
-
-      doc.addImage(diagImg, 'PNG', margin, y, imgWidth, imgHeight);
-      y += imgHeight + 12;
-
-      const diagRows = diagEntries.map(([k, v]) => [k, String(v)]);
-      autoTable(doc, {
-        head: [['Diagnosis', 'Count']],
-        body: diagRows,
-        startY: y,
-        margin: { left: margin, right: margin },
-        theme: 'striped',
+      const diagCounts = {};
+      reportData.forEach(enc => {
+        const diag = enc.chief_complaint || 'Unknown';
+        diagCounts[diag] = (diagCounts[diag] || 0) + 1;
       });
-      y = doc.lastAutoTable ? doc.lastAutoTable.finalY + 18 : y + 120;
-    } else if (type === 'census') {
-      // Census (monthly cases) only
-      const imgWidth = doc.internal.pageSize.getWidth() - margin * 2;
-      const imgHeight = Math.round(imgWidth * 0.45);
-
-      const censusImg = await createChartImage({
-        ...censusConfig,
+      const diagEntries = Object.entries(diagCounts).sort((a, b) => b[1] - a[1]).slice(0, 20);
+      const diagChartConfig = {
+        type: 'pie',
+        data: {
+          labels: diagEntries.map(([k]) => k),
+          datasets: [{
+            data: diagEntries.map(([, v]) => v),
+            backgroundColor: [
+              '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+              '#FF9F40', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+              '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+              '#FF9F40', '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0'
+            ]
+          }]
+        },
         options: {
-          ...(censusConfig.options || {}),
+          responsive: true,
           plugins: {
-            ...(censusConfig.options?.plugins || {}),
-            legend: { display: false }
-          },
+            legend: { display: true, position: 'top' },
+            title: { display: true, text: 'Top Diagnoses' }
+          }
         }
-      }, imgWidth, imgHeight);
+      };
 
-      doc.setFontSize(14);
-      doc.text('Census (Monthly Cases)', margin, y);
-      y += 8;
-
-      doc.addImage(censusImg, 'PNG', margin, y, imgWidth, imgHeight);
-      y += imgHeight + 12;
-
-      // Build small month/count table
       const monthCounts = {};
       reportData.forEach(enc => {
         const month = new Date(enc.encounter_date).toISOString().slice(0, 7);
         monthCounts[month] = (monthCounts[month] || 0) + 1;
       });
       const sortedMonths = Object.keys(monthCounts).sort();
-      const monthRows = sortedMonths.map(m => [m.replace('-', '/'), String(monthCounts[m])]);
-
-      autoTable(doc, {
-        head: [['Month', 'Cases']],
-        body: monthRows,
-        startY: y,
-        margin: { left: margin, right: margin },
-        theme: 'grid',
-      });
-      y = doc.lastAutoTable ? doc.lastAutoTable.finalY + 18 : y + 120;
-    } else if (type === 'visits') {
-      // Visit trends only
-      const imgWidth = doc.internal.pageSize.getWidth() - margin * 2;
-      const imgHeight = Math.round(imgWidth * 0.45);
-
-      const visitsImg = await createChartImage({
-        ...visitsConfig,
+      const censusChartConfig = {
+        type: 'bar',
+        data: {
+          labels: sortedMonths.map(m => m.replace('-', '/')),
+          datasets: [{
+            label: 'Cases',
+            data: sortedMonths.map(m => monthCounts[m]),
+            backgroundColor: 'rgba(54, 162, 235, 0.7)',
+          }]
+        },
         options: {
-          ...(visitsConfig.options || {}),
           plugins: {
-            ...(visitsConfig.options?.plugins || {}),
-            legend: { display: false }
-          },
+            legend: { display: false },
+            title: { display: true, text: 'Monthly Case Counts' }
+          }
         }
-      }, imgWidth, imgHeight);
+      };
 
-      doc.setFontSize(14);
-      doc.text('Visit Trends (Daily)', margin, y);
-      y += 8;
-
-      doc.addImage(visitsImg, 'PNG', margin, y, imgWidth, imgHeight);
-      y += imgHeight + 12;
-
-      // Build small daily visits table (limit to recent 200 days for space)
       const visitCounts = {};
       reportData.forEach(enc => {
         const date = new Date(enc.encounter_date).toISOString().slice(0, 10);
         visitCounts[date] = (visitCounts[date] || 0) + 1;
       });
       const sortedDates = Object.keys(visitCounts).sort();
-      const dateRows = sortedDates.slice(0, 200).map(d => [new Date(d).toLocaleDateString(), String(visitCounts[d])]);
+      const visitsChartConfig = {
+        type: 'bar',
+        data: {
+          labels: sortedDates.map(d => new Date(d).toLocaleDateString()),
+          datasets: [{
+            label: 'Visits',
+            data: sortedDates.map(d => visitCounts[d]),
+            backgroundColor: 'rgba(255, 99, 132, 0.7)',
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Daily Visit Trends' }
+          }
+        }
+      };
 
+      const diagImgWidth = doc.internal.pageSize.getWidth() - headerMargin * 2;
+      const diagImgHeight = Math.round(diagImgWidth * 0.45);
+      const diagImg = await createChartImage(diagChartConfig, diagImgWidth, diagImgHeight);
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.text('Top Diagnoses', headerMargin, y);
+      y += 8;
+      doc.addImage(diagImg, 'PNG', headerMargin, y, diagImgWidth, diagImgHeight);
+      y += diagImgHeight + 12;
+
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.text('Monthly Case Counts', headerMargin, y);
+      y += 8;
+      const censusImgWidth = diagImgWidth;
+      const censusImgHeight = Math.round(censusImgWidth * 0.45);
+      const censusImg = await createChartImage(censusChartConfig, censusImgWidth, censusImgHeight);
+      doc.addImage(censusImg, 'PNG', headerMargin, y, censusImgWidth, censusImgHeight);
+      y += censusImgHeight + 12;
+
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.text('Daily Visit Trends', headerMargin, y);
+      y += 8;
+      const visitsImgWidth = diagImgWidth;
+      const visitsImgHeight = Math.round(visitsImgWidth * 0.45);
+      const visitsImg = await createChartImage(visitsChartConfig, visitsImgWidth, visitsImgHeight);
+      doc.addImage(visitsImg, 'PNG', headerMargin, y, visitsImgWidth, visitsImgHeight);
+      y += visitsImgHeight + 12;
+
+      const diagRows = diagEntries.map(([k, v]) => [k, String(v)]);
+      autoTable(doc, {
+        head: [['Diagnosis', 'Cases']],
+        body: diagRows,
+        startY: y,
+        margin: { left: headerMargin, right: headerMargin },
+        theme: 'grid',
+        styles: { fontSize: 10 },
+        headStyles: {
+          fillColor: [30, 136, 229],
+          textColor: 255,
+          fontStyle: 'bold'
+        }
+      });
+      y = doc.lastAutoTable ? doc.lastAutoTable.finalY + 18 : y + 120;
+
+      autoTable(doc, {
+        head: [['Date', 'ID', 'Clinician', 'Complaint']],
+        body: reportData.map(enc => [
+          new Date(enc.encounter_date).toLocaleString(),
+          enc.patient_id,
+          enc.clinician_name,
+          enc.chief_complaint || 'N/A'
+        ]),
+        startY: y,
+        margin: { left: headerMargin, right: headerMargin },
+        theme: 'striped',
+        styles: { fontSize: 9 },
+        headStyles: {
+          fillColor: [56, 142, 60],
+          textColor: 255,
+          fontStyle: 'bold'
+        }
+      });
+    }
+    else if (type === 'census') {
+      if (!chartData || !chartData.data || !chartData.data.labels || !chartData.data.datasets) {
+        alert('No chart data available for export.');
+        return;
+      }
+      const imgWidth = doc.internal.pageSize.getWidth() - headerMargin * 2;
+      const imgHeight = Math.round(imgWidth * 0.45);
+      const censusImg = await createChartImage({
+        type: chartData.type,
+        data: chartData.data,
+        options: {
+          ...(chartData.options || {}),
+          plugins: {
+            ...(chartData.options?.plugins || {}),
+            legend: { display: false },
+            title: { display: true, text: 'Monthly Case Counts' }
+          },
+        }
+      }, imgWidth, imgHeight);
+
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.text('Census (Monthly Cases)', headerMargin, y);
+      y += 8;
+      doc.addImage(censusImg, 'PNG', headerMargin, y, imgWidth, imgHeight);
+      y += imgHeight + 12;
+
+      const monthRows = chartData.data.labels.map((label, idx) => [
+        label,
+        String(chartData.data.datasets[0].data[idx])
+      ]);
+      autoTable(doc, {
+        head: [['Month', 'Cases']],
+        body: monthRows,
+        startY: y,
+        margin: { left: headerMargin, right: headerMargin },
+        theme: 'grid',
+        styles: { fontSize: 10 },
+        headStyles: {
+          fillColor: [30, 136, 229],
+          textColor: 255,
+          fontStyle: 'bold'
+        }
+      });
+      y = doc.lastAutoTable ? doc.lastAutoTable.finalY + 18 : y + 120;
+
+      autoTable(doc, {
+        head: [['Date', 'Patient ID', 'Clinician', 'Chief Complaint']],
+        body: reportData.map(enc => [
+          new Date(enc.encounter_date).toLocaleDateString(),
+          enc.patient_id,
+          enc.clinician_name,
+          enc.chief_complaint || 'N/A'
+        ]),
+        startY: y,
+        margin: { left: headerMargin, right: headerMargin },
+        theme: 'striped',
+        styles: { fontSize: 9 },
+        headStyles: {
+          fillColor: [56, 142, 60],
+          textColor: 255,
+          fontStyle: 'bold'
+        }
+      });
+    }
+    else if (type === 'visits') {
+      const visitCounts = {};
+      reportData.forEach(enc => {
+        const date = new Date(enc.encounter_date).toISOString().slice(0, 10);
+        visitCounts[date] = (visitCounts[date] || 0) + 1;
+      });
+      const sortedDates = Object.keys(visitCounts).sort();
+      const visitsChartConfig = {
+        type: 'bar',
+        data: {
+          labels: sortedDates.map(d => new Date(d).toLocaleDateString()),
+          datasets: [{
+            label: 'Visits',
+            data: sortedDates.map(d => visitCounts[d]),
+            backgroundColor: 'rgba(255, 99, 132, 0.7)',
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Daily Visit Trends' }
+          }
+        }
+      };
+      const imgWidth = doc.internal.pageSize.getWidth() - headerMargin * 2;
+      const imgHeight = Math.round(imgWidth * 0.45);
+      const visitsImg = await createChartImage(visitsChartConfig, imgWidth, imgHeight);
+
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.text('Daily Visit Trends', headerMargin, y);
+      y += 8;
+      doc.addImage(visitsImg, 'PNG', headerMargin, y, imgWidth, imgHeight);
+      y += imgHeight + 12;
+
+      const dateRows = sortedDates.slice(0, 200).map(d => [new Date(d).toLocaleDateString(), String(visitCounts[d])]);
       autoTable(doc, {
         head: [['Date', 'Visits']],
         body: dateRows,
         startY: y,
-        margin: { left: margin, right: margin },
+        margin: { left: headerMargin, right: headerMargin },
         styles: { fontSize: 9 },
         theme: 'grid',
+        headStyles: {
+          fillColor: [30, 136, 229],
+          textColor: 255,
+          fontStyle: 'bold'
+        }
       });
       y = doc.lastAutoTable ? doc.lastAutoTable.finalY + 18 : y + 120;
+
+      autoTable(doc, {
+        head: [['Date', 'Patient ID', 'Clinician', 'Chief Complaint']],
+        body: reportData.map(enc => [
+          new Date(enc.encounter_date).toLocaleDateString(),
+          enc.patient_id,
+          enc.clinician_name,
+          enc.chief_complaint || 'N/A'
+        ]),
+        startY: y,
+        margin: { left: headerMargin, right: headerMargin },
+        theme: 'striped',
+        styles: { fontSize: 9 },
+        headStyles: {
+          fillColor: [56, 142, 60],
+          textColor: 255,
+          fontStyle: 'bold'
+        }
+      });
     }
 
-    // Finalize and save (filename includes selected type)
     doc.save(`report_${type || 'report'}_${new Date().toISOString().slice(0,10)}.pdf`);
     setShowExportMenu(false);
   } catch (err) {

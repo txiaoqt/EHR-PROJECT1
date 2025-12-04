@@ -29,6 +29,8 @@ const Inventory = () => {
   const [adjustModalMessageType, setAdjustModalMessageType] = useState(''); // 'success' or 'error'
 
   useEffect(() => {
+    let pollInterval;
+
     const fetchData = async () => {
       try {
         const { data: invData, error: invError } = await supabase.from('inventory').select('*');
@@ -44,8 +46,13 @@ const Inventory = () => {
         setLoading(false);
       }
     };
-    fetchData();
+
+    fetchData(); // Initial fetch
+    pollInterval = setInterval(fetchData, 30000); // Poll every 30 seconds
+
+    return () => clearInterval(pollInterval);
   }, []);
+
 
 
 
@@ -54,7 +61,7 @@ const Inventory = () => {
     (selectedCategory === 'All' || item.category === selectedCategory)
   );
 
-  const reorderItems = items.filter(item => item.stock_quantity < item.reorder_level);
+  const reorderItems = items.filter(item => Number(item.stock_quantity) <= Number(item.reorder_level));
 
   const addStock = () => setShowAddModal(true);
 

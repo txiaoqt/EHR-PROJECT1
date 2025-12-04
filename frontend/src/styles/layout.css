@@ -34,3 +34,7 @@ main { flex:1; height:100vh; overflow:auto; min-width:0; }
   .grid-charts { grid-template-columns:1fr; }
   .grid-kpis { flex-direction:column; }
 }
+
+#sidebar-container {
+  transition: none !important;
+}
