@@ -12,6 +12,35 @@ const Login = () => {
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Ensure the visible reCAPTCHA v2 checkbox always renders
+  React.useEffect(() => {
+    const tryRender = () => {
+      const el = document.querySelector('.g-recaptcha');
+      if (window.grecaptcha && el && typeof window.grecaptcha.render === 'function') {
+        try {
+          // If widget already rendered, render will return widget id; re-rendering same element is safe
+          window.grecaptcha.render(el, {
+            sitekey: import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY,
+          });
+        } catch (e) {
+          // ignore rendering errors silently
+          // console.warn('reCAPTCHA render issue', e);
+        }
+        return true;
+      }
+      return false;
+    };
+
+    const interval = setInterval(() => {
+      if (tryRender()) clearInterval(interval);
+    }, 300);
+
+    // try once on mount synchronously too
+    tryRender();
+
+    return () => clearInterval(interval);
+  }, []);
+
   const handleLogin = async () => {
     if (!email || !pass) {
       setMsg('Please enter email and password');
@@ -21,6 +50,15 @@ const Login = () => {
     setMsg('');
 
     try {
+      // Block login unless reCAPTCHA v2 is completed
+      // (this uses the checkbox's response)
+      const captchaToken = typeof window.grecaptcha !== 'undefined' ? window.grecaptcha.getResponse() : '';
+      if (!captchaToken) {
+        setMsg('Please complete the CAPTCHA');
+        setLoading(false);
+        return;
+      }
+
       const { data: users, error } = await supabase
         .from('users')
         .select('id, name, email, password, avatar, role')
@@ -240,6 +278,14 @@ const Login = () => {
                     outline: 'none',
                     boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.04)',
                   }}
+                />
+              </div>
+
+              {/* add the visible reCAPTCHA v2 checkbox widget (no other logic changed) */}
+              <div style={{ margin: '12px 0' }}>
+                <div
+                  className="g-recaptcha"
+                  data-sitekey={import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY}
                 />
               </div>
 
