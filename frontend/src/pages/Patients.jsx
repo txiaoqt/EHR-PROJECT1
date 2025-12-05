@@ -263,7 +263,7 @@ const Patients = () => {
               <div style={{ display: 'flex', gap: 12, padding: 16, borderBottom: '1px solid rgba(0,0,0,0.04)', alignItems: 'center' }}>
                 <div style={{ fontSize: 16, fontWeight: 800 }}>Register Patient</div>
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                  <button className="btn" onClick={() => { setShowRegisterModal(false); setSelectedStudent(null); setStudentSearch(''); setStudentSuggestions([]); setManualStudent({ name: '', id: '', year: 1 }); }}>
+                  <button className="btn secondary" onClick={() => { setShowRegisterModal(false); setSelectedStudent(null); setStudentSearch(''); setStudentSuggestions([]); setManualStudent({ name: '', id: '', year: 1 }); }}>
                     Close
                   </button>
                   <button
@@ -346,7 +346,7 @@ const Patients = () => {
                         </div>
 
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
-                          <button className="btn" onClick={() => { setManualStudent({ name: '', id: '', year: 1 }); }}>Reset</button>
+                          <button className="btn secondary" onClick={() => { setManualStudent({ name: '', id: '', year: 1 }); }}>Reset</button>
                           <button className="btn" onClick={async () => { await submitCreateStudent(); }}>
                             Create
                           </button>
