@@ -157,7 +157,7 @@ const Patients = () => {
   const submitRegisterPatient = async (studentToRegister) => {
     const s = studentToRegister || selectedStudent;
     if (!s || !s.id) {
-      showToast('No student selected', 'error');
+      showToast('No patient selected', 'error');
       return;
     }
     if (patients.some(p => (p.id || '').toString() === (s.id || '').toString())) {
@@ -281,8 +281,28 @@ const Patients = () => {
                 <div style={{ padding: 18 }}>
                   {/* Tabs */}
                   <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                    <button className="btn" onClick={() => { setRegisterTab('search'); setSelectedStudent(null); setManualStudent({ name: '', id: '', year: 1 }); }}>Search Student</button>
-                    <button className="btn" onClick={() => { setRegisterTab('manual'); setStudentSearch(''); setStudentSuggestions([]); setSelectedStudent(null); }}>Add Student</button>
+                    <button
+                      className={registerTab === 'search' ? 'btn' : 'btn secondary'}
+                      onClick={() => {
+                        setRegisterTab('search');
+                        setSelectedStudent(null);
+                        setManualStudent({ name: '', id: '', year: 1 });
+                      }}
+                    >
+                      Search Patient
+                    </button>
+
+                    <button
+                      className={registerTab === 'manual' ? 'btn' : 'btn secondary'}
+                      onClick={() => {
+                        setRegisterTab('manual');
+                        setStudentSearch('');
+                        setStudentSuggestions([]);
+                        setSelectedStudent(null);
+                      }}
+                    >
+                      Add Patient
+                    </button>
                   </div>
 
                   {/* Search tab */}
@@ -331,7 +351,7 @@ const Patients = () => {
                       <div style={{ display: 'grid', gap: 10 }}>
                         <div>
                           <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Full name</label>
-                          <input value={manualStudent.name} onChange={(e) => setManualStudent(prev => ({ ...prev, name: e.target.value }))} placeholder="Student full name" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
+                          <input value={manualStudent.name} onChange={(e) => setManualStudent(prev => ({ ...prev, name: e.target.value }))} placeholder="Patient full name" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
@@ -361,7 +381,7 @@ const Patients = () => {
                   <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10 }}>Preview</div>
 
                   {!previewStudent ? (
-                    <div style={{ color: 'var(--muted)' }}>No student selected. Use the Search tab or Manual Entry to build the student profile, then click Register.</div>
+                    <div style={{ color: 'var(--muted)' }}>No patient selected. Use the Search tab or Manual Entry to build the patient's profile, then click Register.</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <div style={{ fontWeight: 800, fontSize: 16 }}>{previewStudent.name}</div>
