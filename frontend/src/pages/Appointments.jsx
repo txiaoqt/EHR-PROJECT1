@@ -373,7 +373,7 @@ const Appointments = () => {
             <table className="table" aria-label="Appointments table">
               <thead>
                 <tr>
-                  <th>QUEUE #</th>
+                  <th>QUEUE</th>
                   <th>ID</th>
                   <th>TIME</th>
                   <th>TYPE</th>
