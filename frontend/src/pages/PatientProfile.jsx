@@ -294,9 +294,7 @@ const PatientProfile = () => {
             {/* Clinic Header */}
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                
                   <div style={{ fontSize: 25, fontWeight: 700, marginTop: 10}}>Patient’s Profile</div>
-                
               </div>
 
               {/* actions group in header */}
@@ -382,7 +380,6 @@ const PatientProfile = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <h3 style={{ margin: 0 }}>Vitals</h3>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  
                 </div>
               </div>
 
@@ -553,89 +550,149 @@ const PatientProfile = () => {
       </main>
 
       {/* Hidden export container for PDF */}
-      <div style={{ position: 'absolute', left: -9999, top: -9999, width: 794, padding: 24, background: '#fff' }} aria-hidden ref={pdfExportRef}>
-        <div style={{ width: '100%', background: '#fff', color: '#111', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-          {/* Header: logo + clinic title */}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
-            <img src={tupehrlogo} alt="TUP Clinic logo" style={{ width: 100, height: 'auto', objectFit: 'contain' }} />
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 800 }}>Technological University of the Philippines (TUP) Manila – Clinic</div>
-              <div style={{ marginTop: 6, fontSize: 16, fontWeight: 700 }}>Patient's Profile</div>
-            </div>
-          </div>
-
-          <hr style={{ border: 'none', borderTop: '1px solid #ddd', marginBottom: 12 }} />
-
-          {/* Patient summary */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Patient's Name:</div>
-            <div style={{ marginBottom: 8 }}>{patient.name}</div>
-
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>TUP ID:</div>
-            <div style={{ marginBottom: 8 }}>{patient.id}</div>
-
-              <div>
-                <div style={{ fontWeight: 700 }}>Year:</div>
-                <div>{patient.year}</div>
-              </div>
-              
-              <div>
-                <div style={{ fontWeight: 700 }}>Last visit:</div>
-                <div>{patient.last_visit_date || '—'}</div>
-              </div>
-          </div>
-
-          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
-
-          {/* Encounters */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Encounters</div>
-            {encounters.length > 0 ? encounters.map((enc, i) => (
-              <div key={i} style={{ marginBottom: 8 }}>
-                <div style={{ fontWeight: 700 }}>{new Date(enc.encounter_date).toLocaleDateString()}</div>
-                <div><strong>Complaint:</strong> {enc.chief_complaint || 'N/A'}</div>
-                <div><strong>Assessment/Plan:</strong> {enc.assessment_plan || 'N/A'}</div>
-              </div>
-            )) : <div style={{ color: '#666' }}>No encounters recorded.</div>}
-          </div>
-
-          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
-
-          {/* Vitals */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Vitals History</div>
-            {vitalsHistory.length > 0 ? vitalsHistory.map((v, i) => (
-              <div key={i} style={{ marginBottom: 6 }}>
-                <div style={{ fontWeight: 700 }}>{new Date(v.date).toLocaleDateString()}</div>
-                <div>Temp: {v.temp ?? '—'} °C · Pulse: {v.pulse ?? '—'} bpm · BP: {v.bp ?? '—'} · Wt: {v.weight ?? '—'} kg</div>
-              </div>
-            )) : <div style={{ color: '#666' }}>No vitals recorded.</div>}
-          </div>
-
-          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
-
-          {/* Meds & Allergies */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Medications</div>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{patient.medications || 'None'}</div>
-
-            <div style={{ marginTop: 8, fontSize: 14, fontWeight: 800 }}>Allergies</div>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{patient.allergies || 'None'}</div>
-          </div>
-
-          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
-
-          {/* Notes */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Notes</div>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{patient.notes || 'No notes'}</div>
-          </div>
-
-          <div style={{ marginTop: 20, color: '#666', fontSize: 12 }}>
-            Exported from EHR system
-          </div>
+<div
+  id="pdf-export"
+  style={{ position: 'absolute', left: -9999, top: -9999, width: 794, padding: 24, background: '#fff' }}
+  aria-hidden
+  ref={pdfExportRef}
+>
+  <div style={{ width: '100%', background: '#fff', color: '#111', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+    
+    {/* Header: logo + clinic title */}
+    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+      <img src={tupehrlogo} alt="TUP Clinic logo" style={{ width: 100, height: 'auto', objectFit: 'contain' }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 18, fontWeight: 800 }}>
+          Technological University of the Philippines (TUP) Manila – Clinic
         </div>
+        <div style={{ marginTop: 6, fontSize: 16, fontWeight: 700 }}>Patient's Profile</div>
       </div>
+    </div>
+
+    <hr style={{ border: 'none', borderTop: '1px solid #ddd', marginBottom: 12 }} />
+
+    {/* Patient Summary Table */}
+    <section style={{ marginBottom: 14 }}>
+      <table className="export-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th colSpan="2" style={{ textAlign: 'left', paddingBottom: 8, fontSize: 14, fontWeight: 800 }}>
+              Patient Summary
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style={{ fontWeight: 700, padding: '8px 6px' }}>Name</td>
+            <td style={{ padding: '8px 6px' }}>{patient.name}</td>
+          </tr>
+          <tr>
+            <td style={{ fontWeight: 700, padding: '8px 6px' }}>ID</td>
+            <td style={{ padding: '8px 6px' }}>{patient.id}</td>
+          </tr>
+          <tr>
+            <td style={{ fontWeight: 700, padding: '8px 6px' }}>Year</td>
+            <td style={{ padding: '8px 6px' }}>{patient.year}</td>
+          </tr>
+          <tr>
+            <td style={{ fontWeight: 700, padding: '8px 6px' }}>Last Visit</td>
+            <td style={{ padding: '8px 6px' }}>{patient.last_visit_date || '—'}</td>
+          </tr>
+          <tr>
+            <td style={{ fontWeight: 700, padding: '8px 6px' }}>Medications</td>
+            <td style={{ padding: '8px 6px', whiteSpace: 'pre-wrap' }}>{patient.medications || 'None'}</td>
+          </tr>
+          <tr>
+            <td style={{ fontWeight: 700, padding: '8px 6px' }}>Allergies</td>
+            <td style={{ padding: '8px 6px', whiteSpace: 'pre-wrap' }}>{patient.allergies || 'None'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
+
+    {/* Encounters Table */}
+    <section style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Encounters</div>
+      {encounters.length > 0 ? (
+        <table className="export-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '8px 6px' }}>Date</th>
+              <th style={{ textAlign: 'left', padding: '8px 6px' }}>Chief Complaint</th>
+              <th style={{ textAlign: 'left', padding: '8px 6px' }}>Assessment / Plan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {encounters.map((enc, i) => (
+              <tr key={i}>
+                <td style={{ padding: '8px 6px' }}>{new Date(enc.encounter_date).toLocaleDateString()}</td>
+                <td style={{ padding: '8px 6px', whiteSpace: 'pre-wrap' }}>{enc.chief_complaint || 'N/A'}</td>
+                <td style={{ padding: '8px 6px', whiteSpace: 'pre-wrap' }}>{enc.assessment_plan || 'N/A'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <div style={{ color: '#666' }}>No encounters recorded.</div>
+      )}
+    </section>
+
+    <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
+
+    {/* Vitals Table */}
+    <section style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Vitals History</div>
+      {vitalsHistory.length > 0 ? (
+        <table className="export-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '8px 6px' }}>Date</th>
+              <th style={{ textAlign: 'left', padding: '8px 6px' }}>Temp (°C)</th>
+              <th style={{ textAlign: 'left', padding: '8px 6px' }}>Pulse (bpm)</th>
+              <th style={{ textAlign: 'left', padding: '8px 6px' }}>BP</th>
+              <th style={{ textAlign: 'left', padding: '8px 6px' }}>Weight (kg)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vitalsHistory.map((v, i) => (
+              <tr key={i}>
+                <td style={{ padding: '8px 6px' }}>{new Date(v.date).toLocaleDateString()}</td>
+                <td style={{ padding: '8px 6px' }}>{v.temp ?? '—'}</td>
+                <td style={{ padding: '8px 6px' }}>{v.pulse ?? '—'}</td>
+                <td style={{ padding: '8px 6px' }}>{v.bp ?? '—'}</td>
+                <td style={{ padding: '8px 6px' }}>{v.weight ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <div style={{ color: '#666' }}>No vitals recorded.</div>
+      )}
+    </section>
+
+    <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '12px 0' }} />
+
+    {/* Notes */}
+    <section style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Notes</div>
+      <div style={{ whiteSpace: 'pre-wrap', padding: '8px 6px', borderRadius: 4, background: '#fafafa' }}>
+        {patient.notes || 'No notes'}
+      </div>
+    </section>
+
+    {/* Exported timestamp & footer */}
+    <div style={{ marginTop: 20, fontSize: 12, color: '#666' }}>
+      Exported on: {new Date().toLocaleString()}
+    </div>
+
+    <div style={{ marginTop: 4, color: '#666', fontSize: 12 }}>
+      Exported from EHR system
+    </div>
+  </div>
+</div>
+
     </>
   );
 };
