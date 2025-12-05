@@ -1,3 +1,4 @@
+// src/pages/Patients.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
@@ -246,160 +247,164 @@ const Patients = () => {
             </div>
           </div>
 
-          {/* register modal */}
-          {showRegisterModal && (
-            <div style={{
-              position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(0,0,0,0.35)', padding: 16
-            }}>
-              <div style={{ width: 940, maxWidth: '98%', background: 'var(--panel)', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', gap: 12, padding: 16, borderBottom: '1px solid rgba(0,0,0,0.04)', alignItems: 'center' }}>
-                  <div style={{ fontSize: 16, fontWeight: 800 }}>Register Patient</div>
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                    <button className="btn" onClick={() => { setShowRegisterModal(false); setSelectedStudent(null); setStudentSearch(''); setStudentSuggestions([]); setManualStudent({ name: '', id: '', year: 1 }); }}>
-                      Close
-                    </button>
-                    <button
-                      className="btn"
-                      onClick={() => submitRegisterPatient(previewStudent)}
-                      disabled={!previewStudent || registering}
-                      title={!previewStudent ? 'Preview a student first' : 'Register the previewed student'}
-                    >
-                      {registering ? 'Registering…' : `Register`}
-                    </button>
-                  </div>
+          {/* short description below the header (matches Appointments header style) */}
+          <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 13 }}>
+            Manage patient records — register patients, view records, and start new encounters.
+          </div>
+        </div>
+
+        {/* register modal */}
+        {showRegisterModal && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.35)', padding: 16
+          }}>
+            <div style={{ width: 940, maxWidth: '98%', background: 'var(--panel)', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', gap: 12, padding: 16, borderBottom: '1px solid rgba(0,0,0,0.04)', alignItems: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>Register Patient</div>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                  <button className="btn" onClick={() => { setShowRegisterModal(false); setSelectedStudent(null); setStudentSearch(''); setStudentSuggestions([]); setManualStudent({ name: '', id: '', year: 1 }); }}>
+                    Close
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => submitRegisterPatient(previewStudent)}
+                    disabled={!previewStudent || registering}
+                    title={!previewStudent ? 'Preview a student first' : 'Register the previewed student'}
+                  >
+                    {registering ? 'Registering…' : `Register`}
+                  </button>
                 </div>
+              </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 0, minHeight: 360 }}>
-                  <div style={{ padding: 18 }}>
-                    {/* Tabs */}
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                      <button className="btn" onClick={() => { setRegisterTab('search'); setSelectedStudent(null); setManualStudent({ name: '', id: '', year: 1 }); }}>Search Student</button>
-                      <button className="btn" onClick={() => { setRegisterTab('manual'); setStudentSearch(''); setStudentSuggestions([]); setSelectedStudent(null); }}>Add Student</button>
-                    </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 0, minHeight: 360 }}>
+                <div style={{ padding: 18 }}>
+                  {/* Tabs */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <button className="btn" onClick={() => { setRegisterTab('search'); setSelectedStudent(null); setManualStudent({ name: '', id: '', year: 1 }); }}>Search Student</button>
+                    <button className="btn" onClick={() => { setRegisterTab('manual'); setStudentSearch(''); setStudentSuggestions([]); setSelectedStudent(null); }}>Add Student</button>
+                  </div>
 
-                    {/* Search tab */}
-                    {registerTab === 'search' && (
-                      <>
-                        <div style={{ marginBottom: 10 }}>
-                          <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Search students</label>
-                          <input
-                            placeholder="Type name or ID (min 2 chars)"
-                            value={studentSearch}
-                            onChange={(e) => { setStudentSearch(e.target.value); setShowNewStudentForm(false); setSelectedStudent(null); }}
-                            style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }}
-                          />
-                        </div>
+                  {/* Search tab */}
+                  {registerTab === 'search' && (
+                    <>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Search students</label>
+                        <input
+                          placeholder="Type name or ID (min 2 chars)"
+                          value={studentSearch}
+                          onChange={(e) => { setStudentSearch(e.target.value); setShowNewStudentForm(false); setSelectedStudent(null); }}
+                          style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }}
+                        />
+                      </div>
 
-                        <div style={{ maxHeight: 220, overflowY: 'auto', borderRadius: 8 }}>
-                          {studentSuggestions.length > 0 ? (
-                            studentSuggestions.map(s => (
-                              <div key={s.id} onClick={() => { setSelectedStudent(s); setStudentSearch(`${s.name} (${s.id})`); setStudentSuggestions([]); }} style={{ padding: 12, borderBottom: '1px solid rgba(0,0,0,0.04)', cursor: 'pointer' }}>
-                                <div style={{ fontWeight: 700 }}>{s.name}</div>
-                                <div style={{ color: 'var(--muted)', fontSize: 13 }}>{s.id} — Year {s.year}</div>
-                              </div>
-                            ))
-                          ) : (
-                            <div style={{ padding: 12, color: 'var(--muted)' }}>
-                              No suggestions.
+                      <div style={{ maxHeight: 220, overflowY: 'auto', borderRadius: 8 }}>
+                        {studentSuggestions.length > 0 ? (
+                          studentSuggestions.map(s => (
+                            <div key={s.id} onClick={() => { setSelectedStudent(s); setStudentSearch(`${s.name} (${s.id})`); setStudentSuggestions([]); }} style={{ padding: 12, borderBottom: '1px solid rgba(0,0,0,0.04)', cursor: 'pointer' }}>
+                              <div style={{ fontWeight: 700 }}>{s.name}</div>
+                              <div style={{ color: 'var(--muted)', fontSize: 13 }}>{s.id} — Year {s.year}</div>
                             </div>
-                          )}
-                        </div>
-
-                        {selectedStudent && (
-                          <div style={{ marginTop: 12, padding: 12, border: '1px dashed rgba(0,0,0,0.06)', borderRadius: 8 }}>
-                            <div style={{ fontWeight: 800 }}>Selected</div>
-                            <div style={{ marginTop: 6 }}>{selectedStudent.name} — <span style={{ color: 'var(--muted)' }}>{selectedStudent.id}</span> • Year {selectedStudent.year}</div>
-                            <div style={{ marginTop: 10 }}>
-                              <button className="btn" onClick={() => { setSelectedStudent(null); setStudentSearch(''); }}>Change</button>
-                            </div>
+                          ))
+                        ) : (
+                          <div style={{ padding: 12, color: 'var(--muted)' }}>
+                            No suggestions.
                           </div>
                         )}
-                      </>
-                    )}
+                      </div>
 
-                    {/* Manual tab */}
-                    {registerTab === 'manual' && (
-                      <>
-                        <div style={{ display: 'grid', gap: 10 }}>
+                      {selectedStudent && (
+                        <div style={{ marginTop: 12, padding: 12, border: '1px dashed rgba(0,0,0,0.06)', borderRadius: 8 }}>
+                          <div style={{ fontWeight: 800 }}>Selected</div>
+                          <div style={{ marginTop: 6 }}>{selectedStudent.name} — <span style={{ color: 'var(--muted)' }}>{selectedStudent.id}</span> • Year {selectedStudent.year}</div>
+                          <div style={{ marginTop: 10 }}>
+                            <button className="btn" onClick={() => { setSelectedStudent(null); setStudentSearch(''); }}>Change</button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Manual tab */}
+                  {registerTab === 'manual' && (
+                    <>
+                      <div style={{ display: 'grid', gap: 10 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Full name</label>
+                          <input value={manualStudent.name} onChange={(e) => setManualStudent(prev => ({ ...prev, name: e.target.value }))} placeholder="Student full name" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
                           <div>
-                            <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Full name</label>
-                            <input value={manualStudent.name} onChange={(e) => setManualStudent(prev => ({ ...prev, name: e.target.value }))} placeholder="Student full name" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
+                            <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Student ID</label>
+                            <input value={manualStudent.id} onChange={(e) => setManualStudent(prev => ({ ...prev, id: e.target.value }))} placeholder="e.g. 202012345" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
                           </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
-                            <div>
-                              <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Student ID</label>
-                              <input value={manualStudent.id} onChange={(e) => setManualStudent(prev => ({ ...prev, id: e.target.value }))} placeholder="e.g. 202012345" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
-                            </div>
-                            <div>
-                              <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Year</label>
-                              <input value={manualStudent.year} onChange={(e) => setManualStudent(prev => ({ ...prev, year: Number(e.target.value || 1) }))} type="number" min={1} max={8} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
-                            <button className="btn" onClick={() => { setManualStudent({ name: '', id: '', year: 1 }); }}>Reset</button>
-                            <button className="btn" onClick={async () => {
-                              // create student and select it (but do not auto register)
-                              await submitCreateStudent();
-                            }}>
-                              Create
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* right column: preview */}
-                  <div style={{ padding: 18, borderLeft: '1px solid rgba(0,0,0,0.04)', background: '#fff' }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10 }}>Preview</div>
-
-                    {!previewStudent ? (
-                      <div style={{ color: 'var(--muted)' }}>No student selected. Use the Search tab or Manual Entry to build the student profile, then click Register.</div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <div style={{ fontWeight: 800, fontSize: 16 }}>{previewStudent.name}</div>
-                        <div style={{ color: 'var(--muted)' }}>{previewStudent.id} • Year {previewStudent.year || '—'}</div>
-                        <div style={{ marginTop: 8 }}>
-                          <div style={{ fontWeight: 700 }}>Register Preview</div>
-                          <div style={{ color: 'var(--muted)', marginTop: 6 }}>
-                            This will create a patient record with the student details shown and set last visit to today's date.
+                          <div>
+                            <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Year</label>
+                            <input value={manualStudent.year} onChange={(e) => setManualStudent(prev => ({ ...prev, year: Number(e.target.value || 1) }))} type="number" min={1} max={8} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-
-                          <button
-                            className="btn"
-                            onClick={() => {
-                              // if preview is manual (not in students table) switch to manual tab for edits
-                              if (registerTab !== 'manual') setRegisterTab('manual');
-                              if (previewStudent && previewStudent.id && previewStudent.name && (!selectedStudent || selectedStudent.id !== previewStudent.id)) {
-                                // if preview is manualStudent, populate manualStudent for editing
-                                setManualStudent(prev => ({ ...(previewStudent.id ? previewStudent : prev) }));
-                                setRegisterTab('manual');
-                              }
-                            }}
-                          >
-                            Edit
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
+                          <button className="btn" onClick={() => { setManualStudent({ name: '', id: '', year: 1 }); }}>Reset</button>
+                          <button className="btn" onClick={async () => { await submitCreateStudent(); }}>
+                            Create
                           </button>
                         </div>
                       </div>
-                    )}
-                  </div>
+                    </>
+                  )}
+                </div>
+
+                {/* right column: preview */}
+                <div style={{ padding: 18, borderLeft: '1px solid rgba(0,0,0,0.04)', background: '#fff' }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10 }}>Preview</div>
+
+                  {!previewStudent ? (
+                    <div style={{ color: 'var(--muted)' }}>No student selected. Use the Search tab or Manual Entry to build the student profile, then click Register.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ fontWeight: 800, fontSize: 16 }}>{previewStudent.name}</div>
+                      <div style={{ color: 'var(--muted)' }}>{previewStudent.id} • Year {previewStudent.year || '—'}</div>
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontWeight: 700 }}>Register Preview</div>
+                        <div style={{ color: 'var(--muted)', marginTop: 6 }}>
+                          This will create a patient record with the student details shown and set last visit to today's date.
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button
+                          className="btn"
+                          onClick={() => {
+                            if (registerTab !== 'manual') setRegisterTab('manual');
+                            if (previewStudent && previewStudent.id && previewStudent.name && (!selectedStudent || selectedStudent.id !== previewStudent.id)) {
+                              setManualStudent(prev => ({ ...(previewStudent.id ? previewStudent : prev) }));
+                              setRegisterTab('manual');
+                            }
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* results / table */}
-          <div style={{ marginTop: 12, marginBottom: 8, color: 'var(--muted)', fontSize: 13 }}>
-            Results: <strong>{sortedPatients.length}</strong>
+        {/* Card containing Results header (right-aligned) and table */}
+        <div className="card" style={{ marginTop: 12, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>Patients List</div>
+            <div style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 13 }}>
+              Results: <strong>{sortedPatients.length}</strong>
+            </div>
           </div>
 
-          <div style={{ overflow: 'auto' }}>
+          <div style={{ marginTop: 12, overflow: 'auto' }}>
             {/* Use the same table class as Appointments so colors & hover match */}
             <table className="table" aria-label="Patients table">
               <thead>
