@@ -500,7 +500,7 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
       <div className="card" style={{ padding: 16, marginBottom: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: 36, fontWeight: 800, letterSpacing: 0.4 }}>Dashboard</h1>
+            <h1 style={{ margin: 0, fontSize: 25, fontWeight: 700, letterSpacing: 0.4 }}>Dashboard</h1>
             <div style={{ marginTop: 8, color: 'var(--muted)', fontWeight: 600 }}>{currentDateTime}</div>
           </div>
 
