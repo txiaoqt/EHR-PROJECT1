@@ -14,6 +14,22 @@ function localizedDateTime(dateStr) {
     return new Date(dateStr).toLocaleString();
   }
 }
+
+// Helper: return date-key "YYYY-MM-DD" in Asia/Manila for a given date string or Date
+function toManilaDateKey(dateInput) {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  // en-CA produces YYYY-MM-DD formatting
+  try {
+    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  } catch {
+    // fallback
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  }
+}
+
 const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
 
 const Encounters = () => {
@@ -40,13 +56,13 @@ const Encounters = () => {
     toastTimer.current = setTimeout(() => setToast(null), 3500);
   };
 
-  // determine active within last 7 days
+  // Active queue will reference today's date in Asia/Manila
+  const todayKey = toManilaDateKey(new Date());
+
+  // determine active = encounter date is today (Asia/Manila)
   const isActive = (dateStr) => {
     if (!dateStr) return false;
-    const now = Date.now();
-    const then = new Date(dateStr).getTime();
-    const diffDays = (now - then) / (1000 * 60 * 60 * 24);
-    return diffDays <= 7;
+    return toManilaDateKey(dateStr) === todayKey;
   };
 
   // Helper: batch fetch patient names for missing patient_name fields
@@ -128,7 +144,7 @@ const Encounters = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // search + sort behavior same as Patients page
+  // search + sort behavior
   const visible = useMemo(() => {
     const q = (search || '').trim().toLowerCase();
     let arr = (encounters || []).slice();
@@ -170,7 +186,6 @@ const Encounters = () => {
     setLoadingId(encId, true);
 
     try {
-      // First: attempt DB update (if your schema/postgrest is healthy this will persist)
       try {
         const { data, error } = await supabase
           .from('encounters')
@@ -181,22 +196,17 @@ const Encounters = () => {
 
         if (error) throw error;
 
-        // If DB returned updated row, merge it into state
         if (data) {
           setEncounters(prev => prev.map(e => (e.id === encId ? { ...e, ...data } : e)));
           showToast('Marked complete');
           setLoadingId(encId, false);
           return;
         }
-        // else fall through to local fallback (no data returned)
       } catch (dbErr) {
-        // Common during schema cache issues — fallback to local update
         console.warn('DB update failed (falling back to local):', dbErr);
       }
 
-      // Local-only fallback: mark as completed in React state so it immediately moves to history UI
       setEncounters(prev => prev.map(e => (e.id === encId ? { ...e, status: 'completed' } : e)));
-      // small delay to make the button feel like it did something
       await new Promise(res => setTimeout(res, 200));
       showToast('Completed');
     } catch (err) {
@@ -227,19 +237,27 @@ const Encounters = () => {
         return;
       }
 
+      // clear previous body
       const tableBody = container.querySelector('#export-tbody');
       tableBody.innerHTML = '';
 
       for (const r of rows) {
         const tr = document.createElement('tr');
         tr.style.borderTop = '1px solid #eee';
+        // sanitize inline by replacing '<' to '&lt;'
+        const safeName = (r.patient_name || '').replace(/</g,'&lt;');
+        const safeId = (r.patient_id || '').toString().replace(/</g,'&lt;');
+        const safeClin = (r.clinician_name || '').replace(/</g,'&lt;');
+        const safeComplaint = (r.chief_complaint || '').replace(/</g,'&lt;');
+        const safePlan = (r.assessment_plan || '').replace(/</g,'&lt;');
+
         tr.innerHTML = `
-          <td style="padding:8px; font-weight:600;">${(r.patient_name || '').replace(/</g,'&lt;')}</td>
-          <td style="padding:8px;">${(r.patient_id || '').replace(/</g,'&lt;')}</td>
-          <td style="padding:8px;">${localizedDateTime(r.encounter_date || r.created_at)}</td>
-          <td style="padding:8px;">${(r.clinician_name || '').replace(/</g,'&lt;')}</td>
-          <td style="padding:8px; max-width:220px; word-wrap:break-word;">${(r.chief_complaint || '').replace(/</g,'&lt;')}</td>
-          <td style="padding:8px;">${(r.assessment_plan || '').replace(/</g,'&lt;')}</td>
+          <td style="padding:8px; font-weight:600; vertical-align: top;">${safeName}</td>
+          <td style="padding:8px; vertical-align: top;">${safeId}</td>
+          <td style="padding:8px; vertical-align: top;">${localizedDateTime(r.encounter_date || r.created_at)}</td>
+          <td style="padding:8px; vertical-align: top;">${safeClin}</td>
+          <td style="padding:8px; max-width:240px; word-wrap:break-word; vertical-align: top;">${safeComplaint}</td>
+          <td style="padding:8px; vertical-align: top;">${safePlan}</td>
         `;
         tableBody.appendChild(tr);
       }
@@ -248,7 +266,7 @@ const Encounters = () => {
       await Promise.all(imgs.map(img => new Promise(res => { if (img.complete) return res(); img.onload = img.onerror = res; })));
 
       const scale = 2;
-      const canvas = await html2canvas(container, { scale, useCORS: true, allowTaint: true, logging: false });
+      const canvas = await html2canvas(container, { scale, useCORS: true, allowTaint: true, logging: false, windowWidth: container.scrollWidth, windowHeight: container.scrollHeight });
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -317,6 +335,11 @@ const Encounters = () => {
                 <button className="btn" onClick={() => navigate('/encounter')}>Create New Encounter</button>
               </div>
             </div>
+
+            {/* short description below heading (matches style used on Patients page) */}
+            <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 13 }}>
+              Manage today's queue, record patient encounters, and review recent history.
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20, marginTop: 12 }}>
@@ -324,7 +347,9 @@ const Encounters = () => {
             <div className="card" aria-live="polite">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0 }}>Active Queue</h3>
-                <div style={{ color: 'var(--muted)', fontSize: 13 }}>{visible.filter(e => isActive(e.encounter_date) && (e.status || '').toLowerCase() !== 'completed').length} active</div>
+                <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+                  {visible.filter(e => isActive(e.encounter_date) && (e.status || '').toLowerCase() !== 'completed').length} active (for {todayKey})
+                </div>
               </div>
 
               <div style={{ overflow: 'auto', marginTop: 10 }}>
@@ -343,7 +368,7 @@ const Encounters = () => {
                     {loading ? (
                       <tr><td colSpan={6} style={{ padding: 12 }}>Loading…</td></tr>
                     ) : visible.filter(e => isActive(e.encounter_date) && (e.status || '').toLowerCase() !== 'completed').length === 0 ? (
-                      <tr><td colSpan={6} style={{ padding: 12, color: 'var(--muted)' }}>No active encounters.</td></tr>
+                      <tr><td colSpan={6} style={{ padding: 12, color: 'var(--muted)' }}>No active encounters for today.</td></tr>
                     ) : (
                       visible
                         .filter(e => isActive(e.encounter_date) && (e.status || '').toLowerCase() !== 'completed')
@@ -359,7 +384,6 @@ const Encounters = () => {
                                 {loadingIds.includes(enc.id) ? 'Working…' : 'Mark Complete'}
                               </button>
                               <button className="btn" onClick={() => navigate(`/patient-profile?id=${enc.patient_id}`)}>Profile</button>
-                            
                             </td>
                           </tr>
                         ))
@@ -427,18 +451,24 @@ const Encounters = () => {
         </section>
       </main>
 
-      {/* Hidden export container for PDF (styled inline for reliable rendering) */}
+      {/* Hidden export container for PDF (styled inline for reliable rendering)
+          - Updated to match PatientProfile export layout (header, semantic table, exported timestamp)
+      */}
       <div ref={pdfExportRef} style={{ position: 'absolute', left: -9999, top: -9999, width: 794, padding: 24, background: '#fff' }} aria-hidden>
         <div style={{ width: '100%', background: '#fff', color: '#111', fontFamily: 'Arial, Helvetica, sans-serif' }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
             <img src={tupehrlogo} alt="TUP Clinic logo" style={{ width: 100, height: 'auto', objectFit: 'contain' }} />
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={{ fontSize: 18, fontWeight: 800 }}>Technological University of the Philippines (TUP) Manila – Clinic</div>
               <div style={{ marginTop: 6, fontSize: 16, fontWeight: 700 }}>Encounters — Last 30 days</div>
             </div>
           </div>
 
           <hr style={{ border: 'none', borderTop: '1px solid #ddd', marginBottom: 12 }} />
+
+          <div style={{ marginBottom: 10, color: '#444' }}>
+            Manage today's queue and review the most recent encounters (last 30 days).
+          </div>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
@@ -448,7 +478,7 @@ const Encounters = () => {
                 <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #ddd' }}>Date</th>
                 <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #ddd' }}>Clinician</th>
                 <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #ddd' }}>Complaint</th>
-                <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #ddd' }}>Action</th>
+                <th style={{ textAlign: 'left', padding: 8, borderBottom: '1px solid #ddd' }}>Assessment / Plan</th>
               </tr>
             </thead>
             <tbody id="export-tbody">
@@ -456,7 +486,11 @@ const Encounters = () => {
             </tbody>
           </table>
 
-          <div style={{ marginTop: 20, color: '#666', fontSize: 12 }}>
+          <div style={{ marginTop: 20, fontSize: 12, color: '#666' }}>
+            Exported on: <strong>{new Date().toLocaleString()}</strong>
+          </div>
+
+          <div style={{ marginTop: 4, color: '#666', fontSize: 12 }}>
             Exported from EHR system
           </div>
         </div>
