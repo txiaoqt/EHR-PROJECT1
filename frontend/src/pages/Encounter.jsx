@@ -395,4 +395,4 @@ const Encounter = () => {
   );
 };
 
-export default Encounter;
+export default Encounter;  
