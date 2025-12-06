@@ -6,12 +6,10 @@ const Inventory = () => {
   const [items, setItems] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState({
     item_name: '',
-    category: 'Medications',
     stock_quantity: '',
     unit: 'pcs',
     reorder_level: '10'
@@ -28,40 +26,48 @@ const Inventory = () => {
   const [adjustModalMessage, setAdjustModalMessage] = useState('');
   const [adjustModalMessageType, setAdjustModalMessageType] = useState(''); // 'success' or 'error'
 
-  useEffect(() => {
-    let pollInterval;
+  // New: delete modal / verification
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleteMessage, setDeleteMessage] = useState('');
+  const [deleteMessageType, setDeleteMessageType] = useState('');
 
+  useEffect(() => {
     const fetchData = async () => {
       try {
         const { data: invData, error: invError } = await supabase.from('inventory').select('*');
         if (invError) throw invError;
-        setItems(invData);
+        setItems(invData || []);
 
         const { data: transData, error: transError } = await supabase.from('inventory_transactions').select('*').order('created_at', { ascending: false });
         if (transError) throw transError;
-        setTransactions(transData);
+        setTransactions(transData || []);
       } catch (err) {
         console.error('Error fetching inventory data:', err);
       } finally {
         setLoading(false);
       }
     };
-
-    fetchData(); // Initial fetch
-    pollInterval = setInterval(fetchData, 30000); // Poll every 30 seconds
-
-    return () => clearInterval(pollInterval);
+    fetchData();
   }, []);
 
-
-
+  const refreshData = async () => {
+    try {
+      const { data: invData } = await supabase.from('inventory').select('*');
+      setItems(invData || []);
+      const { data: transData } = await supabase.from('inventory_transactions').select('*').order('created_at', { ascending: false });
+      setTransactions(transData || []);
+    } catch (err) {
+      console.error('Error refreshing data:', err);
+    }
+  };
 
   const filteredItems = items.filter(item =>
-    (search === '' || item.item_name.toLowerCase().includes(search.toLowerCase())) &&
-    (selectedCategory === 'All' || item.category === selectedCategory)
+    search.trim() === '' || (item.item_name || '').toLowerCase().includes(search.toLowerCase())
   );
 
-  const reorderItems = items.filter(item => Number(item.stock_quantity) <= Number(item.reorder_level));
+  const reorderItems = items.filter(item => Number(item.stock_quantity) < Number(item.reorder_level));
 
   const addStock = () => setShowAddModal(true);
 
@@ -96,7 +102,7 @@ const Inventory = () => {
     }
 
     // Check for duplicate item name
-    const exists = items.find(item => item.item_name.toLowerCase() === newItem.item_name.toLowerCase());
+    const exists = items.find(item => (item.item_name || '').toLowerCase() === newItem.item_name.toLowerCase());
     if (exists) {
       setModalMessage('An item with this name already exists.');
       setModalMessageType('error');
@@ -106,7 +112,6 @@ const Inventory = () => {
     try {
       const { error } = await supabase.from('inventory').insert([{
         item_name: newItem.item_name.trim(),
-        category: newItem.category,
         stock_quantity: stockQty,
         unit: newItem.unit,
         reorder_level: reorderLvl
@@ -126,10 +131,7 @@ const Inventory = () => {
       await logAudit('Inventory Item Addition', `Added new inventory item: ${newItem.item_name.trim()} with ${stockQty} ${newItem.unit}`);
 
       // Refresh data
-      const { data: invData } = await supabase.from('inventory').select('*');
-      setItems(invData || []);
-      const { data: transData } = await supabase.from('inventory_transactions').select('*').order('created_at', { ascending: false });
-      setTransactions(transData || []);
+      await refreshData();
 
       setModalMessage('Item added successfully!');
       setModalMessageType('success');
@@ -139,15 +141,13 @@ const Inventory = () => {
         setShowAddModal(false);
         setNewItem({
           item_name: '',
-          category: 'Medications',
           stock_quantity: '',
           unit: 'pcs',
           reorder_level: '10'
         });
         setModalMessage('');
         setModalMessageType('');
-      }, 2000);
-
+      }, 1200);
     } catch (err) {
       console.error('Error adding item:', err);
       setModalMessage('Error adding item: ' + (err.message || 'Unknown error'));
@@ -158,6 +158,9 @@ const Inventory = () => {
   const adjust = (item) => {
     setAdjustItem(item);
     setShowAdjustModal(true);
+    setAdjustData({ type: 'add', quantity: '', reason: '' });
+    setAdjustModalMessage('');
+    setAdjustModalMessageType('');
   };
 
   const handleAdjustChange = (e) => {
@@ -182,7 +185,7 @@ const Inventory = () => {
       return;
     }
 
-    const newQty = adjustData.type === 'add' ? adjustItem.stock_quantity + qty : adjustItem.stock_quantity - qty;
+    const newQty = adjustData.type === 'add' ? Number(adjustItem.stock_quantity) + qty : Number(adjustItem.stock_quantity) - qty;
     if (newQty < 0) {
       setAdjustModalMessage('Cannot remove more than available stock.');
       setAdjustModalMessageType('error');
@@ -211,10 +214,7 @@ const Inventory = () => {
       await logAudit('Inventory Stock Adjustment', `${qty} units ${actionType} inventory: ${adjustItem.item_name}. Reason: ${adjustData.reason.trim()}`);
 
       // Refresh data
-      const { data: invData } = await supabase.from('inventory').select('*');
-      setItems(invData || []);
-      const { data: transData } = await supabase.from('inventory_transactions').select('*').order('created_at', { ascending: false });
-      setTransactions(transData || []);
+      await refreshData();
 
       setAdjustModalMessage('Stock adjusted successfully!');
       setAdjustModalMessageType('success');
@@ -226,12 +226,69 @@ const Inventory = () => {
         setAdjustData({ type: 'add', quantity: '', reason: '' });
         setAdjustModalMessage('');
         setAdjustModalMessageType('');
-      }, 2000);
-
+      }, 1200);
     } catch (err) {
       console.error('Error adjusting stock:', err);
       setAdjustModalMessage('Error adjusting stock: ' + (err.message || 'Unknown error'));
       setAdjustModalMessageType('error');
+    }
+  };
+
+  // NEW: Delete flow
+  const openDeleteModal = (item) => {
+    setDeleteItem(item);
+    setDeleteConfirmName('');
+    setDeleteMessage('');
+    setDeleteMessageType('');
+    setShowDeleteModal(true);
+  };
+
+  const submitDelete = async () => {
+    setDeleteMessage('');
+    setDeleteMessageType('');
+    if (!deleteItem) return;
+
+    // verification: require exact item name typed
+    if ((deleteConfirmName || '').trim() !== (deleteItem.item_name || '')) {
+      setDeleteMessage('Please type the exact item name to confirm deletion.');
+      setDeleteMessageType('error');
+      return;
+    }
+
+    try {
+      // delete item
+      const { error: delErr } = await supabase.from('inventory').delete().eq('id', deleteItem.id);
+      if (delErr) throw delErr;
+
+      // add a transaction record for the deletion (out with reason 'deleted')
+      await supabase.from('inventory_transactions').insert([{
+        item_name: deleteItem.item_name,
+        transaction_type: 'out',
+        quantity: deleteItem.stock_quantity || 0,
+        reason: 'Item deleted from inventory',
+        performed_by: 'Dr. Rivera'
+      }]);
+
+      // audit log
+      await logAudit('Inventory Item Deletion', `Deleted inventory item: ${deleteItem.item_name} (id: ${deleteItem.id})`);
+
+      // refresh
+      await refreshData();
+
+      setDeleteMessage('Item deleted successfully.');
+      setDeleteMessageType('success');
+
+      setTimeout(() => {
+        setShowDeleteModal(false);
+        setDeleteItem(null);
+        setDeleteConfirmName('');
+        setDeleteMessage('');
+        setDeleteMessageType('');
+      }, 900);
+    } catch (err) {
+      console.error('Error deleting item:', err);
+      setDeleteMessage('Error deleting item: ' + (err.message || 'Unknown error'));
+      setDeleteMessageType('error');
     }
   };
 
@@ -240,46 +297,33 @@ const Inventory = () => {
   return (
     <main className="main">
       <section className="page">
-        <h2>Inventory</h2>
+        <div style= {{display:'flex', fontSize: '25px', fontWeight:'700', padding:'20px'}}>Inventory</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Stock Levels */}
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
               <h3 style={{ margin: 0 }}>Stock Levels</h3>
-              <div style={{ marginLeft: 'auto' }}>
+
+              {/* SEARCH and ADD aligned on the right */}
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  id="inventory-search"
+                  className="input"
+                  type="search"
+                  placeholder="Search inventory (item name)"
+                  style={{ width: '320px', maxWidth: '40ch' }}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
                 <button className="btn" onClick={addStock}>Add Stock</button>
               </div>
             </div>
-            <div style={{ marginBottom: '12px', display: 'flex', gap: '10px' }}>
-              <input
-                id="inventory-search"
-                className="input"
-                type="search"
-                placeholder="Search inventory (item name)"
-                style={{ flex: 1 }}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <select
-                className="input"
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                style={{ minWidth: '120px' }}
-              >
-                <option value="All">All Categories</option>
-                <option value="Medications">Medications</option>
-                <option value="Diagnostic Equipment">Diagnostic Equipment</option>
-                <option value="PPE">PPE</option>
-                <option value="Consumables">Consumables</option>
-                <option value="First Aid / Disinfectants">First Aid / Disinfectants</option>
-              </select>
-            </div>
-            <div style={{ overflow: 'auto' }}>
+
+            <div style={{ overflow: 'auto', marginBottom: '18px' }}>
               <table className="table" aria-label="Inventory table">
                 <thead>
                   <tr>
                     <th>Item</th>
-                    <th>Category</th>
                     <th>Stock</th>
                     <th>Unit</th>
                     <th>Reorder Level</th>
@@ -288,19 +332,37 @@ const Inventory = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredItems.map(item => (
-                    <tr key={item.id}>
-                      <td>{item.item_name}</td>
-                      <td>{item.category}</td>
-                      <td>{item.stock_quantity}</td>
-                      <td>{item.unit}</td>
-                      <td className="label-muted">{item.reorder_level}</td>
-                      <td style={{ color: item.stock_quantity < item.reorder_level ? 'red' : 'green' }}>
-                        {item.stock_quantity < item.reorder_level ? 'Low Stock' : 'Adequate'}
+                  {filteredItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>
+                        No inventory items found.
                       </td>
-                      <td><button className="btn" onClick={() => adjust(item)}>Adjust</button></td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredItems.map(item => (
+                      <tr key={item.id}>
+                        <td style={{ fontWeight: 700 }}>{item.item_name}</td>
+                        <td>{item.stock_quantity}</td>
+                        <td>{item.unit}</td>
+                        <td className="label-muted">{item.reorder_level}</td>
+                        <td style={{ color: Number(item.stock_quantity) < Number(item.reorder_level) ? 'red' : 'green' }}>
+                          {Number(item.stock_quantity) < Number(item.reorder_level) ? 'Low Stock' : 'Adequate'}
+                        </td>
+                        <td style={{ display: 'flex', gap: 8 }}>
+                          <button className="btn secondary" onClick={() => adjust(item)}>Adjust</button>
+
+                          {/* Delete button */}
+                          <button
+                            className="btn"
+                            onClick={() => openDeleteModal(item)}
+                            title="Delete this item"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -338,16 +400,22 @@ const Inventory = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map(trans => (
-                    <tr key={trans.id}>
-                      <td>{trans.item_name}</td>
-                      <td>{trans.transaction_type}</td>
-                      <td>{trans.quantity}</td>
-                      <td>{trans.reason || 'N/A'}</td>
-                      <td>{trans.performed_by}</td>
-                      <td>{new Date(trans.created_at).toLocaleString()}</td>
+                  {transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: 16, textAlign: 'center', color: 'var(--muted)' }}>No transactions yet.</td>
                     </tr>
-                  ))}
+                  ) : (
+                    transactions.map(trans => (
+                      <tr key={trans.id}>
+                        <td>{trans.item_name}</td>
+                        <td>{trans.transaction_type}</td>
+                        <td>{trans.quantity}</td>
+                        <td>{trans.reason || 'N/A'}</td>
+                        <td>{trans.performed_by}</td>
+                        <td>{new Date(trans.created_at).toLocaleString()}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -390,21 +458,6 @@ const Inventory = () => {
                   placeholder="Enter item name"
                   required
                 />
-              </div>
-              <div style={{ marginBottom: '12px' }}>
-                <label>Category:</label>
-                <select
-                  name="category"
-                  className="input"
-                  value={newItem.category}
-                  onChange={handleNewItemChange}
-                >
-                  <option value="Medications">Medications</option>
-                  <option value="Diagnostic Equipment">Diagnostic Equipment</option>
-                  <option value="PPE">PPE</option>
-                  <option value="Consumables">Consumables</option>
-                  <option value="First Aid / Disinfectants">First Aid / Disinfectants</option>
-                </select>
               </div>
               <div style={{ marginBottom: '12px' }}>
                 <label>Stock Quantity:</label>
@@ -484,7 +537,7 @@ const Inventory = () => {
             padding: '20px',
             borderRadius: '8px',
             boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-            maxWidth: '400px',
+            maxWidth: '420px',
             width: '100%'
           }}>
             <h3>Adjust Stock: {adjustItem.item_name}</h3>
@@ -543,6 +596,66 @@ const Inventory = () => {
                 <button type="submit" className="btn">Adjust Stock</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteModal && deleteItem && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1100
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '20px',
+            borderRadius: '8px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+            maxWidth: '480px',
+            width: '100%'
+          }}>
+            <h3 style={{ marginTop: 0 }}>Delete Item: {deleteItem.item_name}</h3>
+            <p style={{ color: 'var(--muted)' }}>
+              This will permanently remove the item from inventory. To confirm, type the item name <strong>{deleteItem.item_name}</strong> below.
+            </p>
+
+            <div style={{ marginBottom: 12 }}>
+              <input
+                className="input"
+                type="text"
+                placeholder="Type exact item name to confirm"
+                value={deleteConfirmName}
+                onChange={(e) => setDeleteConfirmName(e.target.value)}
+              />
+            </div>
+
+            {deleteMessage && (
+              <div style={{
+                padding: '8px',
+                marginBottom: '12px',
+                borderRadius: '4px',
+                color: deleteMessageType === 'error' ? 'red' : 'green',
+                border: `1px solid ${deleteMessageType === 'error' ? 'red' : 'green'}`,
+                fontSize: '14px'
+              }}>
+                {deleteMessage}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn" onClick={() => submitDelete}>Delete Item</button>
+              <button className="btn" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+              
+              
+            </div>
           </div>
         </div>
       )}
