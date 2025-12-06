@@ -1,69 +1,85 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient.js';
-import { loadSettings, saveSettings as saveSettingsUtil, translate, formatDate, formatTime } from '../utils.js';
-import { useAuth } from '../AuthContext.jsx';
+// src/pages/Settings.jsx
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
+import { supabase } from '../supabaseClient.js';             // supabase client
+import {
+  loadSettings,
+  saveSettings as saveSettingsUtil,
+  translate,
+  formatDate,
+  formatTime
+} from '../utils.js';                                        // utilities
+import { useAuth } from '../AuthContext.jsx';                // auth context
 
 const Settings = () => {
+  const location = useLocation();
   const { user: authUser } = useAuth();
+
   const [settings, setSettings] = useState(() => loadSettings());
-  const [user, setUser] = useState({ name: '', role: '', email: '' });
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(true);
+
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
+  const [backingUp, setBackingUp] = useState(false);
+  const [lastBackup, setLastBackup] = useState(() => localStorage.getItem('last_backup') || 'Never');
+
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const backupCardRef = useRef(null);
 
   useEffect(() => {
-    if (authUser) {
-      // Format display name like in sidebar
-      let displayName = authUser.name;
-      const prefix = authUser.email.split('.')[0].toLowerCase();
-      if (prefix === 'dr' && !displayName.startsWith('Dr.')) {
-        displayName = `Dr. ${displayName}`;
-      } else if (prefix === 'nurse' && !displayName.startsWith('Nr.')) {
-        displayName = `Nr. ${displayName.replace(/^(Nurse\s+)?/, '')}`;
-      } else if (prefix === 'admin') {
-        displayName = `Admin ${displayName}`;
-      }
-
-      // Capitalize role
-      const roleFormatted = authUser.role ? authUser.role.charAt(0).toUpperCase() + authUser.role.slice(1) : '';
-
-      setUser({ name: displayName, role: roleFormatted, email: authUser.email });
-      setLoading(false);
+    // Initialize loading and ensure theme value exists in settings
+    setLoading(false);
+    if (!settings.theme) {
+      const saved = loadSettings().theme || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      setSettings(prev => ({ ...prev, theme: saved }));
+      // apply initial theme
+      window.applyTheme && window.applyTheme(saved);
+    } else {
+      window.applyTheme && window.applyTheme(settings.theme);
     }
-  }, [authUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const applyTheme = (mode) => {
-    window.applyTheme && window.applyTheme(mode);
-    setSettings(prev => ({ ...prev, theme: mode }));
-  };
+  useEffect(() => {
+    if (location?.state?.focus === 'backup' && backupCardRef.current) {
+      setTimeout(() => {
+        try {
+          backupCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (e) { /* ignore */ }
+      }, 150);
+    }
+  }, [location]);
 
   const handleSettingChange = (key, value) => {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  const saveSettings = async () => {
-    // Save to localStorage first for immediate UI updates
-    saveSettingsUtil(settings);
+  const revertSettings = () => {
+    const saved = loadSettings();
+    setSettings(saved);
+    // apply theme from saved settings
+    if (saved.theme) window.applyTheme && window.applyTheme(saved.theme);
+    setMessage('Reverted to saved settings.');
+    setMessageType('info');
+    setTimeout(() => setMessage(''), 2500);
+  };
 
+  const saveSettings = async () => {
+    // Save to local storage / app utils
+    saveSettingsUtil(settings);
+    setMessage(translate('settings_saved'));
+    setMessageType('success');
+    setTimeout(() => setMessage(''), 3000);
+
+    // Try to persist settings to Supabase (per-key upsert)
     try {
-      // Save to Supabase
       for (const [key, value] of Object.entries(settings)) {
         await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
       }
-
-      setMessage(translate('settings_saved'));
-      setMessageType('success');
-      setTimeout(() => setMessage(''), 3000);
-
-      // Reload to apply translation changes
-      setTimeout(() => window.location.reload(), 100);
-    } catch (error) {
-      console.error('Error saving settings:', error);
-      setMessage('Error saving settings.');
-      setMessageType('error');
-      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      console.warn('Failed to sync settings to Supabase:', err);
     }
   };
 
@@ -82,12 +98,11 @@ const Settings = () => {
     }
 
     try {
-      // Update password in Supabase users table
+      if (!authUser?.id) throw new Error('No user');
       const { error } = await supabase
         .from('users')
         .update({ password: newPassword })
         .eq('id', authUser.id);
-
       if (error) throw error;
 
       setMessage('Password changed successfully!');
@@ -95,32 +110,109 @@ const Settings = () => {
       setNewPassword('');
       setConfirmPassword('');
       setTimeout(() => setMessage(''), 3000);
-    } catch (error) {
-      console.error('Error changing password:', error);
+    } catch (err) {
       setMessage('Error changing password.');
       setMessageType('error');
       setTimeout(() => setMessage(''), 3000);
     }
   };
 
-  if (loading) return <main className="main"><div className="card">Loading settings...</div></main>;
+  const backupAll = async () => {
+    setBackingUp(true);
+    setMessage('Preparing backup...');
+    setMessageType('info');
+
+    try {
+      const tables = [
+        'patients',
+        'encounters',
+        'appointments',
+        'inventory',
+        'users',
+        'settings',
+        'audit_logs'
+      ];
+
+      const results = {};
+
+      for (const t of tables) {
+        try {
+          const { data, error } = await supabase.from(t).select('*');
+          if (error) results[t] = { error: error.message };
+          else results[t] = data || [];
+        } catch (err) {
+          results[t] = { error: err.message };
+        }
+      }
+
+      const payload = {
+        exported_at: new Date().toISOString(),
+        exported_by: authUser?.email || 'unknown',
+        data: results
+      };
+
+      const filename = `tup_ehr_backup_${new Date()
+        .toISOString()
+        .replace(/[:.]/g, '-')}.json`;
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json'
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const ts = new Date().toLocaleString();
+      localStorage.setItem('last_backup', ts);
+      setLastBackup(ts);
+
+      try {
+        await supabase.from('settings').upsert(
+          [{ key: 'last_backup', value: ts }],
+          { onConflict: 'key' }
+        );
+      } catch (e) {
+        console.warn('Failed to upsert last_backup:', e);
+      }
+
+      setMessage('Backup complete! File downloaded.');
+      setMessageType('success');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      console.error('Backup failed:', err);
+      setMessage('Backup failed.');
+      setMessageType('error');
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  if (loading) return <main className="main"><div className="card">Loading…</div></main>;
 
   return (
     <main className="main">
+
       {message && (
         <div style={{
           position: 'fixed',
-          top: '20px',
+          top: 20,
           left: '50%',
           transform: 'translateX(-50%)',
-          zIndex: 2000,
-          padding: '12px 24px',
-          borderRadius: '8px',
+          padding: '12px 20px',
           color: 'white',
-          fontWeight: 'bold',
-          backgroundColor: messageType === 'error' ? '#dc3545' : '#28a745',
-          boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-          animation: 'fadeIn 0.3s ease-in-out'
+          fontWeight: 600,
+          borderRadius: 8,
+          background: messageType === 'error'
+            ? '#d9534f'
+            : messageType === 'success'
+            ? '#28a745'
+            : '#0d6efd',
+          zIndex: 2000
         }}>
           {message}
         </div>
@@ -129,238 +221,206 @@ const Settings = () => {
       <section className="page">
         <div className="card">
           <h2>Settings</h2>
-          <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '12px' }}>Settings Preview</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+
+          {/* BACKUP CARD — TOP */}
+          <div
+            className="card"
+            ref={backupCardRef}
+            style={{ marginTop: 20 }}
+          >
+            <h3 style={{ marginTop: 0 }}>Backup & Export</h3>
+            <p style={{ color: 'var(--muted)' }}>
+              Create a full export of system tables for offline backup or migration.
+            </p>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div>
-                <strong style={{ color: 'var(--primary)' }}>Date/Time Format</strong><br />
-                <div style={{ marginTop: '4px', fontFamily: 'monospace', background: 'white', padding: '4px', borderRadius: '4px' }}>
+                <div style={{ fontSize: 13, color: 'var(--muted)' }}>Last backup</div>
+                <div style={{ fontWeight: 600 }}>{lastBackup}</div>
+              </div>
+
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                <button className="btn" disabled={backingUp} onClick={backupAll}>
+                  {backingUp ? 'Backing up…' : 'Backup all data'}
+                </button>
+                <button
+                  className="btn secondary"
+                  onClick={() => {
+                    setMessage(lastBackup === 'Never'
+                      ? 'No backup found.'
+                      : `Last backup: ${lastBackup}`);
+                    setMessageType('info');
+                    setTimeout(() => setMessage(''), 3000);
+                  }}
+                >
+                  Info
+                </button>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
+              Included: patients, encounters, appointments, inventory, users, settings, audit_logs.
+            </div>
+          </div>
+
+          {/* MAIN GRID */}
+          <div style={{
+            marginTop: 20,
+            display: 'grid',
+            gridTemplateColumns: '1fr 420px',
+            gap: 20
+          }}>
+            {/* LEFT COLUMN */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div className="card">
+                <h3 style={{ marginTop: 0 }}>Account</h3>
+
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ color: 'var(--muted)', fontSize: 13 }}>Signed in as</div>
+                  <div style={{ fontWeight: 600 }}>
+                    {authUser?.name || authUser?.email || '—'}
+                  </div>
+                  <div style={{ color: 'var(--muted)', fontSize: 12 }}>{authUser?.role}</div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                  <input
+                    type="password"
+                    placeholder="New password"
+                    className="input"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                  />
+                  <input
+                    type="password"
+                    placeholder="Confirm password"
+                    className="input"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                  />
+                  <button className="btn" onClick={changePassword}>Change</button>
+                </div>
+              </div>
+
+              {/* APPEARANCE CARD (updated: active uses .btn, inactive uses .btn secondary) */}
+              <div className="card">
+                <h3 style={{ marginTop: 0 }}>Appearance</h3>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {/* LIGHT BUTTON */}
+                  <button
+                    className={`btn ${settings.theme !== 'light' ? 'secondary' : ''}`}
+                    onClick={() => {
+                      handleSettingChange('theme', 'light');
+                      window.applyTheme && window.applyTheme('light');
+                    }}
+                  >
+                    Light
+                  </button>
+
+                  {/* DARK BUTTON */}
+                  <button
+                    className={`btn ${settings.theme !== 'dark' ? 'secondary' : ''}`}
+                    onClick={() => {
+                      handleSettingChange('theme', 'dark');
+                      window.applyTheme && window.applyTheme('dark');
+                    }}
+                  >
+                    Dark
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div className="card">
+                <h3 style={{ marginTop: 0 }}>Application Settings</h3>
+
+                <div style={{ marginBottom: 10 }}>
+                  <label className="label-muted">Auto-save</label>
+                  <input
+                    type="checkbox"
+                    checked={!!settings.auto_save}
+                    onChange={e => handleSettingChange('auto_save', e.target.checked)}
+                    style={{ marginLeft: 8 }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 10 }}>
+                  <label className="label-muted">Email Notifications</label>
+                  <input
+                    type="checkbox"
+                    checked={!!settings.notifications_email}
+                    onChange={e => handleSettingChange('notifications_email', e.target.checked)}
+                    style={{ marginLeft: 8 }}
+                  />
+                </div>
+              </div>
+
+              {/* ACTIONS CARD (Revert / Save) */}
+              <div className="card">
+                <h3 style={{ marginTop: 0 }}>Actions</h3>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    className="btn secondary"
+                    onClick={revertSettings}
+                  >
+                    Revert
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={saveSettings}
+                  >
+                    Save
+                  </button>
+                </div>
+                <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
+                  Revert restores settings from local saved values. Save persists settings locally and attempts to sync to the server.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* PREVIEW AT BOTTOM */}
+          <div className="card" style={{ marginTop: 25, background: 'rgba(0,0,0,0.03)' }}>
+            <h3 style={{ marginTop: 0 }}>Preview</h3>
+
+            <div style={{
+              marginTop: 14,
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gap: 18
+            }}>
+              <div>
+                <strong>Date / Time</strong>
+                <div style={{ marginTop: 6, fontFamily: 'monospace' }}>
                   {formatDate(new Date())} {formatTime(new Date())}
                 </div>
               </div>
+
               <div>
-                <strong style={{ color: 'var(--primary)' }}>Sample Weight</strong><br />
-                <div style={{ marginTop: '4px', fontFamily: 'monospace', background: 'white', padding: '4px', borderRadius: '4px' }}>
+                <strong>Sample Weight</strong>
+                <div style={{ marginTop: 6, fontFamily: 'monospace' }}>
                   {settings.clinical_units === 'metric' ? '65.5 kg' : '144.6 lbs'}
                 </div>
               </div>
+
               <div>
-                <strong style={{ color: 'var(--primary)' }}>Sample Height</strong><br />
-                <div style={{ marginTop: '4px', fontFamily: 'monospace', background: 'white', padding: '4px', borderRadius: '4px' }}>
+                <strong>Sample Height</strong>
+                <div style={{ marginTop: 6, fontFamily: 'monospace' }}>
                   {settings.clinical_units === 'metric' ? '170 cm' : `5'7"`}
                 </div>
               </div>
             </div>
+
             {settings.language === 'fil' && (
-              <div style={{ marginTop: '12px', padding: '8px', background: '#e3f2fd', borderRadius: '4px' }}>
-                <strong>Language Preview:</strong> Nagbabago ang wika sa Filipino kung ito ay nakikita
+              <div style={{ marginTop: 12, padding: 8, background: '#e3f2fd', borderRadius: 6 }}>
+                Preview: Filipino language is active.
               </div>
             )}
-            {settings.language === 'en' && (
-              <div style={{ marginTop: '12px', padding: '8px', background: '#fff3cd', borderRadius: '4px' }}>
-                <strong>Language Preview:</strong> Interface language has been switched to English
-              </div>
-            )}
+
           </div>
 
-          <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-
-            {/* Left Column */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Profile Settings */}
-              <div className="card">
-                <h3 style={{ marginTop: 0 }}>Profile Settings</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div>
-                    <label className="label-muted">Display Name</label>
-                    <div style={{ fontWeight: 'bold', marginTop: '4px' }}>{user.name}</div>
-                  </div>
-                  <div>
-                    <label className="label-muted">Email</label>
-                    <div style={{ color: 'var(--muted)', marginTop: '4px' }}>{user.email}</div>
-                  </div>
-                  <div>
-                    <label className="label-muted">Role</label>
-                    <div style={{ color: 'var(--muted)', marginTop: '4px' }}>{user.role}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Password Change */}
-              <div className="card">
-                <h3 style={{ marginTop: 0 }}>Change Password</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div>
-                    <label>New Password</label>
-                    <input
-                      type="password"
-                      className="input"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Enter new password"
-                    />
-                  </div>
-                  <div>
-                    <label>Confirm Password</label>
-                    <input
-                      type="password"
-                      className="input"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm new password"
-                    />
-                  </div>
-                  <button className="btn" onClick={changePassword}>Change Password</button>
-                </div>
-              </div>
-
-              {/* Appearance */}
-              <div className="card">
-                <h3 style={{ marginTop: 0 }}>Appearance</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div>
-                    <label>Theme</label>
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                      <button
-                        className={`btn ${settings.theme === 'light' ? 'secondary' : ''}`}
-                        onClick={() => applyTheme('light')}
-                      >
-                        Light
-                      </button>
-                      <button
-                        className={`btn ${settings.theme === 'dark' ? 'secondary' : ''}`}
-                        onClick={() => applyTheme('dark')}
-                      >
-                        Dark
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <label>Language</label>
-                    <select
-                      className="input"
-                      value={settings.language}
-                      onChange={(e) => handleSettingChange('language', e.target.value)}
-                      style={{ marginTop: '4px' }}
-                    >
-                      <option value="en">English</option>
-                      <option value="fil">Filipino</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Clinical Settings */}
-              <div className="card">
-                <h3 style={{ marginTop: 0 }}>Clinical Settings</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div>
-                    <label className="label-muted">Measurement Units</label>
-                    <select
-                      className="input"
-                      value={settings.clinical_units}
-                      onChange={(e) => handleSettingChange('clinical_units', e.target.value)}
-                      style={{ marginTop: '4px' }}
-                    >
-                      <option value="metric">Metric (kg, cm)</option>
-                      <option value="imperial">Imperial (lbs, in)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label-muted">Date Format</label>
-                    <select
-                      className="input"
-                      value={settings.date_format}
-                      onChange={(e) => handleSettingChange('date_format', e.target.value)}
-                      style={{ marginTop: '4px' }}
-                    >
-                      <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                      <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                      <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label-muted">Time Format</label>
-                    <select
-                      className="input"
-                      value={settings.time_format}
-                      onChange={(e) => handleSettingChange('time_format', e.target.value)}
-                      style={{ marginTop: '4px' }}
-                    >
-                      <option value="12h">12-hour</option>
-                      <option value="24h">24-hour</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Security Settings */}
-              <div className="card">
-                <h3 style={{ marginTop: 0 }}>Security Settings</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div>
-                    <label className="label-muted">Session Timeout (minutes)</label>
-                    <select
-                      className="input"
-                      value={settings.session_timeout}
-                      onChange={(e) => handleSettingChange('session_timeout', e.target.value)}
-                      style={{ marginTop: '4px' }}
-                    >
-                      <option value="15">15 minutes</option>
-                      <option value="30">30 minutes</option>
-                      <option value="60">1 hour</option>
-                      <option value="240">4 hours</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label-muted">Auto Logout (minutes)</label>
-                    <select
-                      className="input"
-                      value={settings.auto_logout}
-                      onChange={(e) => handleSettingChange('auto_logout', e.target.value)}
-                      style={{ marginTop: '4px' }}
-                    >
-                      <option value="5">5 minutes</option>
-                      <option value="15">15 minutes</option>
-                      <option value="30">30 minutes</option>
-                      <option value="60">1 hour</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Application Settings */}
-              <div className="card">
-                <h3 style={{ marginTop: 0 }}>Application Settings</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div>
-                    <label className="label-muted">Auto-save Forms</label>
-                    <input
-                      type="checkbox"
-                      checked={settings.auto_save}
-                      onChange={(e) => handleSettingChange('auto_save', e.target.checked)}
-                      style={{ marginLeft: '8px' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="label-muted">Email Notifications</label>
-                    <input
-                      type="checkbox"
-                      checked={settings.notifications_email}
-                      onChange={(e) => handleSettingChange('notifications_email', e.target.checked)}
-                      style={{ marginLeft: '8px' }}
-                    />
-                  </div>
-                  <div style={{ marginTop: '12px' }}>
-                    <button className="btn" onClick={saveSettings}>Save All Settings</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
     </main>
