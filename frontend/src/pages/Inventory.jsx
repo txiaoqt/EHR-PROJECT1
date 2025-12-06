@@ -310,36 +310,47 @@ const Inventory = () => {
   return (
     <main className="main">
       <section className="page">
-        <div style={{ display: 'flex', fontSize: '25px', fontWeight: '700', padding: '20px' }}>Inventory</div>
+        {/* Header card (matches Patients header style) */}
+        <div className="card" style={{ padding: 16, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 25, fontWeight: 700 }}>Inventory</div>
+
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                id="inventory-search"
+                type="search"
+                placeholder="Search inventory (item name)"
+                style={{ padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', minWidth: 260 }}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                style={{ padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }}
+              >
+                <option value="All">All Categories</option>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+
+              <button className="btn" onClick={addStock}>Add Stock</button>
+            </div>
+          </div>
+
+          {/* short description below the header (matches Appointments / Patients header style) */}
+          <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 13 }}>
+            Manage inventory — view stock levels, add items, adjust stock, and review transactions.
+          </div>
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Stock Levels */}
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
               <h3 style={{ margin: 0 }}>Stock Levels</h3>
-
-              {/* SEARCH and ADD aligned on the right */}
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  id="inventory-search"
-                  className="input"
-                  type="search"
-                  placeholder="Search inventory (item name)"
-                  style={{ width: '320px', maxWidth: '40ch' }}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                <select
-                  className="input"
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  style={{ minWidth: 160 }}
-                >
-                  <option value="All">All Categories</option>
-                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-
-                <button className="btn" onClick={addStock}>Add Stock</button>
-              </div>
+              {/* NOTE: the search/category/Add Stock controls were intentionally removed from here
+                  because they're now in the header card above. */}
             </div>
 
             <div style={{ overflow: 'auto', marginBottom: '18px' }}>
