@@ -18,6 +18,7 @@ import {
   Filler,
 } from 'chart.js';
 import { logAudit } from '../utils.js'; // keep if you use it; optional
+import { useAuth } from '../AuthContext.jsx'; // <-- ADDED: useAuth (so clinician resolves same as Appointments)
 
 ChartJS.register(
   CategoryScale,
@@ -34,6 +35,7 @@ ChartJS.register(
 
 const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // <-- ADDED: get user from AuthContext
 
   // KPI & data states
   const [currentDateTime, setCurrentDateTime] = useState('');
@@ -71,7 +73,7 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
     appointment_date: '',
     appointment_time: '',
     type: 'Consult',
-    clinician_name: '',
+    clinician_name: user ? user.name : '', // initialize from useAuth if available
     status: 'Scheduled'
   });
   const [savingAppt, setSavingAppt] = useState(false);
@@ -363,19 +365,87 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
   };
 
   // ---------------- New Appointment modal (Dashboard) ----------------
-  const openNewModal = () => {
-    // try to fill clinician_name from Supabase auth or leave blank
+  // Helper to resolve clinician display name (tries useAuth user first, then supabase auth, then profiles table)
+  const resolveClinicianName = async () => {
     try {
-      // supabase.auth.user() may be available depending on your supabase client version
-      const user = supabase.auth && supabase.auth.user ? supabase.auth.user() : null;
-      setNewAppt(p => ({ ...p, clinician_name: (user && (user.user_metadata?.name || user.email)) || '' }));
-    } catch (e) { /* ignore */ }
+      // 1) prefer useAuth user (synchronous)
+      if (user) {
+        // many apps set user.name; if not, fallback to email
+        return user.name || user.full_name || user.email || '';
+      }
+
+      // 2) Try Supabase v2 method
+      if (supabase.auth && typeof supabase.auth.getUser === 'function') {
+        try {
+          const { data: userData, error: userErr } = await supabase.auth.getUser();
+          const su = userData?.user ?? null;
+          if (su) {
+            let name = (su.user_metadata && (su.user_metadata.name || su.user_metadata.full_name)) || su.email || '';
+            // try profile lookup for nicer name
+            try {
+              const { data: profile, error: profErr } = await supabase
+                .from('profiles')
+                .select('full_name, name')
+                .eq('id', su.id)
+                .single();
+              if (!profErr && profile) name = profile.full_name || profile.name || name;
+            } catch (e) { /* ignore */ }
+            return name;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // 3) Try older supabase.auth.user() (v1)
+      if (supabase.auth && typeof supabase.auth.user === 'function') {
+        try {
+          const su = supabase.auth.user();
+          if (su) {
+            const name = (su.user_metadata && (su.user_metadata.name || su.user_metadata.full_name)) || su.email || '';
+            try {
+              const { data: profile, error: profErr } = await supabase
+                .from('profiles')
+                .select('full_name, name')
+                .eq('id', su.id)
+                .single();
+              if (!profErr && profile) return profile.full_name || profile.name || name;
+            } catch (e) { /* ignore */ }
+            return name;
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      // 4) Local storage fallback (rare)
+      try {
+        const stored = localStorage.getItem('session') || localStorage.getItem('user') || localStorage.getItem('currentUser');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return parsed?.user_metadata?.name || parsed?.name || parsed?.email || '';
+        }
+      } catch (e) { /* ignore parse errors */ }
+
+      return '';
+    } catch (err) {
+      console.warn('resolveClinicianName error', err);
+      return '';
+    }
+  };
+
+  // openNewModal: set clinician_name same as Appointments page (prefer useAuth user)
+  const openNewModal = async () => {
+    try {
+      const clinicianName = await resolveClinicianName();
+      setNewAppt(p => ({ ...p, clinician_name: clinicianName || '' }));
+    } catch (err) {
+      console.warn('openNewModal clinician resolution error', err);
+    }
     setShowNewApptModal(true);
   };
   const closeNewModal = () => {
     setShowNewApptModal(false);
     setPatientSearch(''); setPatientSuggestions([]); setSelectedName('');
-    setNewAppt({ patient_id:'', appointment_date:'', appointment_time:'', type:'Consult', clinician_name:'', status:'Scheduled' });
+    setNewAppt({ patient_id:'', appointment_date:'', appointment_time:'', type:'Consult', clinician_name: user ? user.name : '', status:'Scheduled' });
   };
   const handleNewApptChange = (e) => {
     const { id, value } = e.target;
@@ -555,8 +625,6 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
             )}</div>
           </div>
 
-      
-
           {/* DIAGNOSIS (pie on top, compact legend below) */}
           <div className="card" style={squareCardStyle}>
             <h3 style={{ marginTop: 0 }}>Diagnosis Distribution</h3>
@@ -577,7 +645,9 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
                   {diagnosesData.labels.map((lbl, i) => {
                     const value = (diagnosesData.datasets?.[0]?.data?.[i]) ?? '';
                     const bg = diagnosesData.datasets?.[0]?.backgroundColor?.[i] || 'rgba(0,0,0,0.08)';
-                    
+                    // we intentionally do not render these extra legend items here to avoid duplication,
+                    // but kept structure in case you want to add label items later.
+                    return null;
                   })}
                 </div>
               )}
