@@ -6,10 +6,12 @@ const Inventory = () => {
   const [items, setItems] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState({
     item_name: '',
+    category: 'Medications',
     stock_quantity: '',
     unit: 'pcs',
     reorder_level: '10'
@@ -63,11 +65,20 @@ const Inventory = () => {
     }
   };
 
+  const categories = [
+    'Medications',
+    'Diagnostic Equipment',
+    'PPE',
+    'Consumables',
+    'First Aid / Disinfectants'
+  ];
+
   const filteredItems = items.filter(item =>
-    search.trim() === '' || (item.item_name || '').toLowerCase().includes(search.toLowerCase())
+    (search.trim() === '' || (item.item_name || '').toLowerCase().includes(search.toLowerCase())) &&
+    (selectedCategory === 'All' || (item.category || 'Uncategorized') === selectedCategory)
   );
 
-  const reorderItems = items.filter(item => Number(item.stock_quantity) < Number(item.reorder_level));
+  const reorderItems = items.filter(item => Number(item.stock_quantity) <= Number(item.reorder_level));
 
   const addStock = () => setShowAddModal(true);
 
@@ -86,8 +97,8 @@ const Inventory = () => {
       return;
     }
 
-    const stockQty = parseInt(newItem.stock_quantity);
-    const reorderLvl = parseInt(newItem.reorder_level);
+    const stockQty = Number(newItem.stock_quantity);
+    const reorderLvl = Number(newItem.reorder_level);
 
     if (isNaN(stockQty) || stockQty < 0) {
       setModalMessage('Stock quantity must be a positive number.');
@@ -112,6 +123,7 @@ const Inventory = () => {
     try {
       const { error } = await supabase.from('inventory').insert([{
         item_name: newItem.item_name.trim(),
+        category: newItem.category,
         stock_quantity: stockQty,
         unit: newItem.unit,
         reorder_level: reorderLvl
@@ -141,6 +153,7 @@ const Inventory = () => {
         setShowAddModal(false);
         setNewItem({
           item_name: '',
+          category: 'Medications',
           stock_quantity: '',
           unit: 'pcs',
           reorder_level: '10'
@@ -178,7 +191,7 @@ const Inventory = () => {
       return;
     }
 
-    const qty = parseInt(adjustData.quantity);
+    const qty = Number(adjustData.quantity);
     if (isNaN(qty) || qty <= 0) {
       setAdjustModalMessage('Quantity must be a positive number.');
       setAdjustModalMessageType('error');
@@ -297,7 +310,7 @@ const Inventory = () => {
   return (
     <main className="main">
       <section className="page">
-        <div style= {{display:'flex', fontSize: '25px', fontWeight:'700', padding:'20px'}}>Inventory</div>
+        <div style={{ display: 'flex', fontSize: '25px', fontWeight: '700', padding: '20px' }}>Inventory</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Stock Levels */}
           <div className="card">
@@ -315,6 +328,16 @@ const Inventory = () => {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
+                <select
+                  className="input"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  style={{ minWidth: 160 }}
+                >
+                  <option value="All">All Categories</option>
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+
                 <button className="btn" onClick={addStock}>Add Stock</button>
               </div>
             </div>
@@ -324,6 +347,7 @@ const Inventory = () => {
                 <thead>
                   <tr>
                     <th>Item</th>
+                    <th>Category</th>
                     <th>Stock</th>
                     <th>Unit</th>
                     <th>Reorder Level</th>
@@ -334,7 +358,7 @@ const Inventory = () => {
                 <tbody>
                   {filteredItems.length === 0 ? (
                     <tr>
-                      <td colSpan={6} style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>
+                      <td colSpan={7} style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>
                         No inventory items found.
                       </td>
                     </tr>
@@ -342,6 +366,7 @@ const Inventory = () => {
                     filteredItems.map(item => (
                       <tr key={item.id}>
                         <td style={{ fontWeight: 700 }}>{item.item_name}</td>
+                        <td>{item.category || 'Uncategorized'}</td>
                         <td>{item.stock_quantity}</td>
                         <td>{item.unit}</td>
                         <td className="label-muted">{item.reorder_level}</td>
@@ -459,6 +484,19 @@ const Inventory = () => {
                   required
                 />
               </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label>Category:</label>
+                <select
+                  name="category"
+                  className="input"
+                  value={newItem.category}
+                  onChange={handleNewItemChange}
+                >
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
               <div style={{ marginBottom: '12px' }}>
                 <label>Stock Quantity:</label>
                 <input
@@ -651,10 +689,8 @@ const Inventory = () => {
             )}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn" onClick={() => submitDelete}>Delete Item</button>
+              <button className="btn" onClick={submitDelete}>Delete Item</button>
               <button className="btn" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-              
-              
             </div>
           </div>
         </div>
