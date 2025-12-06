@@ -498,5 +498,5 @@ const Appointments = () => {
     </main>
   );
 };
-
+ 
 export default Appointments;
