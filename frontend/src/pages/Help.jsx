@@ -51,17 +51,31 @@ const Help = () => {
   ];
 
   return (
-    <main className="main" style={{ background: '#fafbfc', minHeight: '100vh' }}>
+    <main className="main" style={{ minHeight: '100vh' }}>
       <section
         className="page"
         style={{
           maxWidth: 1200,
           margin: '0 auto',
-          padding: '40px 24px'
+          padding: '24px'
         }}
       >
-        <h2 style={{ marginBottom: 32 }}>Help & Training</h2>
+        {/* Header card — uses .card so it follows light/dark theme */}
+        <div className="card" style={{ padding: 16, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>Help & Training</div>
 
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+              {/* reserved for future header controls (search, submit ticket, etc.) */}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 8, color: 'var(--muted)', fontSize: 13 }}>
+            Find answers to common questions, step-by-step guides for clinic workflows, and contact details for support.
+          </div>
+        </div>
+
+        {/* Main content grid */}
         <div
           style={{
             display: 'grid',
@@ -70,32 +84,24 @@ const Help = () => {
             alignItems: 'flex-start'
           }}
         >
-          {/* FAQ Card */}
-          <div
-            className="card"
-            style={{
-              background: '#fff',
-              borderRadius: '12px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-              padding: '24px'
-            }}
-          >
+          {/* FAQ Card — uses .card so theme is consistent */}
+          <div className="card" style={{ padding: 24 }}>
             <h3 style={{ marginTop: 0 }}>FAQs</h3>
 
             {faqs.map((faq, index) => (
               <div
                 key={index}
                 style={{
-                  border: '1px solid #f0f0f0',
-                  borderRadius: '6px',
-                  marginBottom: '8px'
+                  border: '1px solid rgba(0,0,0,0.05)',
+                  borderRadius: 6,
+                  marginBottom: 8,
                 }}
               >
                 <button
                   onClick={() => toggleFaq(index)}
                   style={{
                     width: '100%',
-                    padding: '12px',
+                    padding: 12,
                     textAlign: 'left',
                     border: 'none',
                     background: 'transparent',
@@ -103,24 +109,19 @@ const Help = () => {
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    fontSize: '14px',
-                    fontWeight: 500
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: 'var(--text)',
                   }}
                 >
                   {faq.question}
-                  <span style={{ fontSize: '18px', color: 'var(--muted)' }}>
+                  <span style={{ fontSize: 18, color: 'var(--muted)' }}>
                     {expandedFaq === index ? '−' : '+'}
                   </span>
                 </button>
 
                 {expandedFaq === index && (
-                  <div
-                    style={{
-                      padding: '0 12px 12px 12px',
-                      color: 'var(--muted)',
-                      fontSize: '14px'
-                    }}
-                  >
+                  <div style={{ padding: '0 12px 12px 12px', color: 'var(--muted)', fontSize: 14 }}>
                     {faq.answer}
                   </div>
                 )}
@@ -128,32 +129,17 @@ const Help = () => {
             ))}
           </div>
 
-          {/* Quick Guides Card */}
-          <div
-            className="card"
-            style={{
-              background: '#fff',
-              borderRadius: '12px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-              padding: '24px'
-            }}
-          >
+          {/* Quick Guides Card — also theme-aware */}
+          <div className="card" style={{ padding: 24 }}>
             <h3 style={{ marginTop: 0 }}>Quick Guides</h3>
 
             {guides.map((guide, index) => (
-              <div
-                key={index}
-                style={{
-                  border: '1px solid #f0f0f0',
-                  borderRadius: '6px',
-                  marginBottom: '8px'
-                }}
-              >
+              <div key={index} style={{ border: '1px solid rgba(0,0,0,0.05)', borderRadius: 6, marginBottom: 8 }}>
                 <button
                   onClick={() => toggleGuide(index)}
                   style={{
                     width: '100%',
-                    padding: '12px',
+                    padding: 12,
                     textAlign: 'left',
                     border: 'none',
                     background: 'transparent',
@@ -161,24 +147,19 @@ const Help = () => {
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    fontSize: '14px',
-                    fontWeight: 500
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: 'var(--text)',
                   }}
                 >
                   {guide.title}
-                  <span style={{ fontSize: '18px', color: 'var(--muted)' }}>
+                  <span style={{ fontSize: 18, color: 'var(--muted)' }}>
                     {expandedGuide === index ? '−' : '+'}
                   </span>
                 </button>
 
                 {expandedGuide === index && (
-                  <div
-                    style={{
-                      padding: '0 12px 12px 12px',
-                      color: 'var(--muted)',
-                      fontSize: '14px'
-                    }}
-                  >
+                  <div style={{ padding: '0 12px 12px 12px', color: 'var(--muted)', fontSize: 14 }}>
                     {guide.content}
                   </div>
                 )}
@@ -186,26 +167,19 @@ const Help = () => {
             ))}
           </div>
 
-          {/* Contact Support - spans both columns */}
-          <div
-            className="card"
-            style={{
-              gridColumn: '1 / -1',
-              background: '#fff',
-              border: '1px solid #e0e0e0',
-              borderRadius: '12px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-              padding: '28px 22px',
-              minHeight: '100px'
-            }}
-          >
-            <h3 style={{ margin: 0, color: '#1976d2', fontWeight: 600 }}>Contact Support</h3>
-            <div style={{ fontSize: '15px', marginTop: '12px' }}>            
-              <div style={{ marginBottom: '8px' }}>
-                <strong>Phone:</strong> <a href="tel:+6323027750" style={{ color: '#1976d2' }}>(02) 302‑7750</a>
+          {/* Contact Support — spans both columns; uses .card */}
+          <div className="card" style={{ gridColumn: '1 / -1', padding: 28 }}>
+            <h3 style={{ margin: 0, color: 'var(--accent)', fontWeight: 600 }}>Contact Support</h3>
+            <div style={{ fontSize: 15, marginTop: 12 }}>
+              <div style={{ marginBottom: 8 }}>
+                <strong>Phone:</strong> <a href="tel:+639127839134" style={{ color: 'var(--accent)' }}>(+63) 253 013 001</a>
               </div>
               <div>
                 <strong>Hours:</strong> 8:00 AM – 5:00 PM
+              </div>
+
+              <div style={{ marginTop: 12, color: 'var(--muted)' }}>
+                For technical issues, include a brief description, steps to reproduce, and a screenshot if possible when emailing tup@tup.edu.ph.
               </div>
             </div>
           </div>
