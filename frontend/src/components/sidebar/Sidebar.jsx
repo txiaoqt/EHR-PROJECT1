@@ -1,8 +1,8 @@
-// src/components/sidebar/Sidebar.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { translate } from '../../utils';
 import { useAuth } from '../../AuthContext.jsx';
+import { supabase } from '../../supabaseClient.js';
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -12,6 +12,9 @@ const Sidebar = () => {
 
   // Confirmation popup state
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // show last backup timestamp
+  const [lastBackup, setLastBackup] = useState(() => localStorage.getItem('last_backup') || '--');
 
   useEffect(() => {
     // re-render trigger for settings changes
@@ -53,6 +56,53 @@ const Sidebar = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [user]);
 
+  // Fetch last_backup from Supabase on mount (fallback to localStorage), and listen to backupCompleted events
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchLastBackup = async () => {
+      try {
+        // try reading from settings table (authoritative)
+        const { data, error } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'last_backup')
+          .maybeSingle();
+
+        if (!error && data && data.value) {
+          if (mounted) {
+            setLastBackup(data.value);
+            localStorage.setItem('last_backup', data.value);
+          }
+        } else {
+          // fallback to localStorage (already initialised)
+          const local = localStorage.getItem('last_backup');
+          if (mounted && local) setLastBackup(local);
+        }
+      } catch (err) {
+        // ignore — keep localStorage or default
+        const local = localStorage.getItem('last_backup');
+        if (mounted && local) setLastBackup(local);
+      }
+    };
+
+    fetchLastBackup();
+
+    const onBackupCompleted = (ev) => {
+      // ev may be a CustomEvent with detail timestamp, or a plain Event
+      const ts = ev?.detail || localStorage.getItem('last_backup') || '--';
+      setLastBackup(ts);
+      if (ts && ts !== '--') localStorage.setItem('last_backup', ts);
+    };
+
+    window.addEventListener('backupCompleted', onBackupCompleted);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('backupCompleted', onBackupCompleted);
+    };
+  }, []);
+
   const handleNavigation = (page) => {
     // Keep UI active state in sync
     const menuItems = document.querySelectorAll('.menu-item');
@@ -75,9 +125,6 @@ const Sidebar = () => {
 
   // When clicking Last backup, navigate to settings and focus the backup card
   const openBackupSettings = () => navigate('/settings', { state: { focus: 'backup' } });
-
-  // read last backup timestamp from localStorage (fallback 'Never')
-  const lastBackup = localStorage.getItem('last_backup') || '--';
 
   return (
     <>
