@@ -357,7 +357,7 @@ const Patients = () => {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
                           <div>
                             <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Student ID</label>
-                            <input value={manualStudent.id} onChange={(e) => setManualStudent(prev => ({ ...prev, id: e.target.value }))} placeholder="e.g. 202012345" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
+                            <input value={manualStudent.id} onChange={(e) => setManualStudent(prev => ({ ...prev, id: e.target.value }))} placeholder="e.g. TUPM-XX-XXXX" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Year</label>
