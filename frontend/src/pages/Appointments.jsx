@@ -31,6 +31,14 @@ const Appointments = () => {
   });
   const [loading, setLoading] = useState(true);
 
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState('');
+  const [deleteMessage, setDeleteMessage] = useState('');
+  const [deleteMessageType, setDeleteMessageType] = useState(''); // 'success'|'error'
+  const [deleting, setDeleting] = useState(false);
+
   // fetch appointments
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -209,6 +217,66 @@ const Appointments = () => {
     }
   };
 
+  // Delete handlers
+  const openDeleteModal = (appt) => {
+    setDeleteItem(appt);
+    setDeleteConfirmId('');
+    setDeleteMessage('');
+    setDeleteMessageType('');
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setDeleteItem(null);
+    setDeleteConfirmId('');
+    setDeleteMessage('');
+    setDeleteMessageType('');
+  };
+
+  const submitDeleteAppointment = async () => {
+    if (!deleteItem || !deleteItem.id) {
+      setDeleteMessage('Invalid appointment selected.');
+      setDeleteMessageType('error');
+      return;
+    }
+    // require exact patient_id typed for safety
+    if ((deleteConfirmId || '').trim() !== String(deleteItem.patient_id)) {
+      setDeleteMessage('Please type the exact Patient ID to confirm deletion.');
+      setDeleteMessageType('error');
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteMessage('');
+    setDeleteMessageType('');
+    try {
+      const { error } = await supabase.from('appointments').delete().eq('id', deleteItem.id);
+      if (error) throw error;
+
+      // update local state
+      setAppointments(prev => (prev || []).filter(a => a.id !== deleteItem.id));
+      setDeleteMessage('Appointment deleted successfully.');
+      setDeleteMessageType('success');
+
+      try {
+        await logAudit('Appointment Deletion', `Deleted appointment ${deleteItem.id} (patient ${deleteItem.patient_id})`, user?.name || null);
+      } catch (e) {
+        console.warn('audit failed', e);
+      }
+
+      setTimeout(() => {
+        closeDeleteModal();
+      }, 900);
+    } catch (err) {
+      console.error('Error deleting appointment:', err);
+      setDeleteMessage('Error deleting appointment: ' + (err.message || 'Unknown error'));
+      setDeleteMessageType('error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // action button only reads current status and redirects accordingly
   const handleAction = (appt) => {
     if (!appt) return;
@@ -293,7 +361,6 @@ const Appointments = () => {
   };
 
   return (
-    
     <main className="main">
       <section className="page">
         {/* Header card with description below header */}
@@ -414,18 +481,18 @@ const Appointments = () => {
                       </td>
                       <td>
                         {/* explicit, clearer action labels with emoji */}
-                        {appt.status === 'Checked-in' && (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                           <button className="btn" onClick={() => handleAction(appt)}> Open </button>
-                        )}
-                        {appt.status === 'Scheduled' && (
-                          <button className="btn" onClick={() => handleAction(appt)}> Open </button>
-                        )}
-                        {appt.status === 'Cancelled' && (
-                          <button className="btn" onClick={() => handleAction(appt)}> Open </button>
-                        )}
-                        {!['Checked-in','Scheduled','Cancelled'].includes(appt.status) && (
-                          <button className="btn " onClick={() => handleAction(appt)}> Open </button>
-                        )}
+
+                          {/* Delete button */}
+                          <button
+                            className="btn secondary"
+                            onClick={() => openDeleteModal(appt)}
+                            title="Delete this appointment"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -494,10 +561,70 @@ const Appointments = () => {
           </div>
         )}
 
+        {/* Delete Appointment modal */}
+        {showDeleteModal && deleteItem && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1250
+          }}>
+            <div style={{
+              background: 'white',
+              padding: '20px',
+              borderRadius: '8px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              maxWidth: '520px',
+              width: '100%'
+            }}>
+              <h3 style={{ marginTop: 0 }}>Delete Appointment</h3>
+              <p style={{ color: 'var(--muted)' }}>
+                This will permanently remove the appointment for patient <strong>{deleteItem.patient_id}</strong> on <strong>{deleteItem.appointment_date}</strong> at <strong>{formatTime12(deleteItem.appointment_time)}</strong>.
+              </p>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', marginBottom: 6 }}>Type the exact Patient ID to confirm</label>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="e.g., TUPM-XX-XXXX"
+                  value={deleteConfirmId}
+                  onChange={(e) => setDeleteConfirmId(e.target.value)}
+                />
+              </div>
+
+              {deleteMessage && (
+                <div style={{
+                  padding: '8px',
+                  marginBottom: '12px',
+                  borderRadius: '4px',
+                  color: deleteMessageType === 'error' ? 'red' : 'green',
+                  border: `1px solid ${deleteMessageType === 'error' ? 'red' : 'green'}`,
+                  fontSize: '14px'
+                }}>
+                  {deleteMessage}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn" onClick={closeDeleteModal} disabled={deleting}>Cancel</button>
+                <button className="btn" onClick={submitDeleteAppointment} disabled={deleting}>
+                  {deleting ? 'Deleting…' : 'Delete Appointment'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </section>
     </main>
   );
 };
- 
+
 export default Appointments;
- 
