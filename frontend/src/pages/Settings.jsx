@@ -1,4 +1,3 @@
-// src/pages/Settings.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';             // supabase client
@@ -177,6 +176,17 @@ const Settings = () => {
         );
       } catch (e) {
         console.warn('Failed to upsert last_backup:', e);
+      }
+
+      // Dispatch a global event so other components (Sidebar) can update immediately.
+      try {
+        window.dispatchEvent(new CustomEvent('backupCompleted', { detail: ts }));
+      } catch (e) {
+        // fallback to simple Event if CustomEvent is not available
+        try {
+          const ev = new Event('backupCompleted');
+          window.dispatchEvent(ev);
+        } catch (_) { /* ignore */ }
       }
 
       setMessage('Backup complete! File downloaded.');
