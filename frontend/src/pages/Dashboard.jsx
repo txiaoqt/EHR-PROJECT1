@@ -180,27 +180,53 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
       datasets: [{ label: 'Count', data: top10.map(([,v]) => v), backgroundColor: 'rgba(54,162,235,0.6)', borderColor: 'rgba(54,162,235,1)', borderWidth: 1 }]
     });
 
-    // diagnoses
-    const { data: diagnoses } = await supabase.from('encounters').select('assessment_plan').not('assessment_plan','is',null);
-    const diagCounts = {};
-    if (diagnoses && Array.isArray(diagnoses)) {
-      diagnoses.forEach(d => {
-        const raw = d.assessment_plan || '';
-        const diag = raw.split(',')[0] || raw;
-        diagCounts[diag] = (diagCounts[diag] || 0) + 1;
-      });
-    }
-    const diagTop = Object.entries(diagCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
-    setDiagnosesData({
-      labels: diagTop.map(([k]) => (k && k.length>20 ? k.substring(0,20)+'...' : k)),
-      datasets: [{ data: diagTop.map(([,v]) => v), backgroundColor: [
-        'rgba(255,99,132,0.6)','rgba(54,162,235,0.6)','rgba(255,205,86,0.6)','rgba(75,192,192,0.6)',
-        'rgba(153,102,255,0.6)','rgba(255,159,64,0.6)','rgba(75,192,192,0.6)','rgba(54,162,235,0.6)',
-        'rgba(255,205,86,0.6)','rgba(255,99,132,0.6)'
-      ], borderWidth: 1 }]
-    });
+    // ------------ DIAGNOSES (CHANGED) ------------
+    // Use the same logic as Reports: count chief_complaint over last 30 days so Dashboard matches Reports.
+    try {
+      // compute 30-day window (inclusive)
+      const nowD = new Date();
+      const fromD = new Date(nowD);
+      fromD.setDate(nowD.getDate() - 29); // last 30 days (today + preceding 29 days)
+      const fromIso = fromD.toISOString().slice(0,10);
+      const toIso = nowD.toISOString().slice(0,10);
 
-  }, []);
+      // query chief_complaint within the 30-day window
+      const { data: diagnoses } = await supabase
+        .from('encounters')
+        .select('chief_complaint')
+        .gte('encounter_date', fromIso)
+        .lte('encounter_date', toIso + 'T23:59:59')
+        .not('chief_complaint', 'is', null);
+
+      const diagCounts = {};
+      if (diagnoses && Array.isArray(diagnoses)) {
+        diagnoses.forEach(d => {
+          const diagRaw = (d.chief_complaint || '').trim();
+          const label = diagRaw ? diagRaw : 'Unknown';
+          diagCounts[label] = (diagCounts[label] || 0) + 1;
+        });
+      }
+      const diagTop = Object.entries(diagCounts).sort((a,b) => b[1]-a[1]).slice(0,10);
+
+      setDiagnosesData({
+        labels: diagTop.map(([k]) => k),
+        datasets: [{
+          data: diagTop.map(([,v]) => v),
+          backgroundColor: [
+            'rgba(255,99,132,0.6)','rgba(54,162,235,0.6)','rgba(255,205,86,0.6)','rgba(75,192,192,0.6)',
+            'rgba(153,102,255,0.6)','rgba(255,159,64,0.6)','rgba(75,192,192,0.6)','rgba(54,162,235,0.6)',
+            'rgba(255,205,86,0.6)','rgba(255,99,132,0.6)'
+          ],
+          borderWidth: 1
+        }]
+      });
+    } catch (diagErr) {
+      console.warn('Diagnoses fetch error', diagErr);
+      setDiagnosesData(null);
+    }
+    // ------------ end DIAGNOSES ------------
+
+  }, []); // no dependencies — called on mount by effect below
 
   useEffect(() => {
     fetchDashboardData();
