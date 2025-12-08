@@ -56,6 +56,14 @@ const Encounters = () => {
     toastTimer.current = setTimeout(() => setToast(null), 3500);
   };
 
+  // DELETE modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteItem, setDeleteItem] = useState(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteMessage, setDeleteMessage] = useState('');
+  const [deleteMessageType, setDeleteMessageType] = useState(''); // success | error
+  const [deleting, setDeleting] = useState(false);
+
   // Active queue will reference today's date in Asia/Manila
   const todayKey = toManilaDateKey(new Date());
 
@@ -216,6 +224,66 @@ const Encounters = () => {
       setLoadingId(encId, false);
     }
   };
+
+  // ---------------- DELETE ENCOUNTER ----------------
+  const openDeleteModal = (enc) => {
+    setDeleteItem(enc);
+    setDeleteConfirmText('');
+    setDeleteMessage('');
+    setDeleteMessageType('');
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setDeleteItem(null);
+    setDeleteConfirmText('');
+    setDeleteMessage('');
+    setDeleteMessageType('');
+  };
+
+  const submitDeleteEncounter = async () => {
+    if (!deleteItem || !deleteItem.id) {
+      setDeleteMessage('Invalid encounter.');
+      setDeleteMessageType('error');
+      return;
+    }
+
+    // require patient ID typed for safety
+    if (deleteConfirmText !== String(deleteItem.patient_id)) {
+      setDeleteMessage('Type the exact patient ID to confirm.');
+      setDeleteMessageType('error');
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('encounters')
+        .delete()
+        .eq('id', deleteItem.id);
+
+      if (error) throw error;
+
+      // remove locally
+      setEncounters(prev => prev.filter(e => e.id !== deleteItem.id));
+
+      setDeleteMessage('Encounter deleted successfully.');
+      setDeleteMessageType('success');
+
+      // close after delay
+      setTimeout(() => {
+        closeDeleteModal();
+      }, 900);
+    } catch (err) {
+      console.error(err);
+      setDeleteMessage('Delete failed: ' + (err.message || err));
+      setDeleteMessageType('error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+  // ---------------- end DELETE ----------------
 
   // ---------------- PDF Export (last 30 days) ----------------
   const exportPdfLast30Days = async () => {
@@ -429,6 +497,15 @@ const Encounters = () => {
                             <td style={{ padding: 10, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{enc.chief_complaint || 'N/A'}</td>
                             <td style={{ padding: 10, display: 'flex', gap: 8 }}>
                               <button className="btn" onClick={() => navigate(`/patient-profile?id=${enc.patient_id}`)}>Profile</button>
+
+                              {/* DELETE BUTTON */}
+                              <button
+                                className="btn secondary"
+                                onClick={() => openDeleteModal(enc)}
+                                title="Delete Encounter"
+                              >
+                                Delete
+                              </button>
                             </td>
                           </tr>
                         ))
@@ -495,6 +572,62 @@ const Encounters = () => {
           </div>
         </div>
       </div>
+
+      {/* DELETE MODAL */}
+      {showDeleteModal && deleteItem && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: 'white',
+            padding: 20,
+            borderRadius: 10,
+            width: '420px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+          }}>
+            <h3 style={{ marginTop: 0 }}>Delete Encounter</h3>
+
+            <p style={{ color: 'var(--muted)' }}>
+              This will permanently delete the encounter for <strong>{deleteItem.patient_id}</strong>.
+            </p>
+
+            <div>
+              <label>Type the Patient ID to confirm:</label>
+              <input
+                className="input"
+                style={{ marginTop: 6 }}
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+              />
+            </div>
+
+            {deleteMessage && (
+              <div style={{
+                marginTop: 12,
+                padding: '8px',
+                borderRadius: 6,
+                border: `1px solid ${deleteMessageType === 'error' ? 'red' : 'green'}`,
+                color: deleteMessageType === 'error' ? 'red' : 'green'
+              }}>
+                {deleteMessage}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <button className="btn" onClick={closeDeleteModal} disabled={deleting}>Cancel</button>
+              <button className="btn secondary" onClick={submitDeleteEncounter} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
