@@ -289,25 +289,7 @@ const Login = () => {
                 />
               </div>
 
-              <div className="actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: 12 }}>
-                <button
-                  className="link"
-                  id="forgot"
-                  type="button"
-                  onClick={() => navigate('/forgot-password')}
-                  style={{
-                    color: 'rgba(255,255,255,0.95)',
-                    textDecoration: 'underline',
-                    cursor: 'pointer',
-                    background: 'none',
-                    border: 'none',
-                    fontSize: 13,
-                    padding: 0
-                  }}
-                >
-                  Forgot Password
-                </button>
-
+              <div className="actions" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginTop: 12 }}>
                 <button
                   id="loginBtn"
                   className="btn"
