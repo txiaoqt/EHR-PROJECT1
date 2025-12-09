@@ -52,6 +52,9 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
 
   const [lowStockItems, setLowStockItems] = useState([]);
 
+  // Alerts modal state
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
+
   // search
   const [searchQuery, setSearchQuery] = useState('');
   const [searchSuggestions, setSearchSuggestions] = useState([]);
@@ -509,6 +512,20 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
     setPatientSuggestions([]);
   };
 
+  // Handler to open alerts modal
+  const openAlertsModal = (e) => {
+    e && e.stopPropagation && e.stopPropagation();
+    setShowAlertsModal(true);
+  };
+  const closeAlertsModal = () => setShowAlertsModal(false);
+
+  // When clicking a low stock item in the modal or card, navigate to inventory and pass focus
+  const goToInventoryItem = (item) => {
+    // send state.focus as item id; Inventory can read location.state.focus
+    navigate('/inventory', { state: { focus: item.id } });
+    setShowAlertsModal(false);
+  };
+
   // ---------------- UI render ----------------
   // smaller square cards: minHeight 170 (removed strict aspectRatio to avoid forced wide boxes)
   const squareCardStyle = {
@@ -699,10 +716,29 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
 
         {/* aside */}
         <aside style={{ display:'flex', flexDirection:'column', gap:12 }}>
-          <div className="card">
+          {/* Alerts card is clickable: opens the centered modal */}
+          <div
+            className="card"
+            onClick={openAlertsModal}
+            style={{ cursor: 'pointer' }}
+          >
             <h3 style={{ marginTop:0 }}>Alerts</h3>
             {lowStockItems.length === 0 && <div style={{ color:'var(--muted)' }}>No alerts</div>}
-            {lowStockItems.map((it, idx) => <div key={idx} style={{ color:'var(--muted)', fontSize:15, marginTop: idx>0?8:0 }}>Low stock: {it.item_name} ({it.stock_quantity} left)</div>)}
+            {lowStockItems.map((it, idx) => (
+              <div
+                key={idx}
+                onClick={(e) => {
+                  // prevent outer onClick (which opens modal) from interfering if clicking a specific item;
+                  // navigate to inventory focused on this item
+                  e.stopPropagation();
+                  navigate('/inventory', { state: { focus: it.id } });
+                }}
+                style={{ color:'var(--muted)', fontSize:15, marginTop: idx>0?8:0, cursor: 'pointer' }}
+                title="Go to inventory"
+              >
+                Low stock: {it.item_name} ({it.stock_quantity} left)
+              </div>
+            ))}
           </div>
 
           <div className="card quick">
@@ -727,6 +763,81 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
           </div>
         </aside>
       </section>
+
+      {/* Alerts centered modal (box border at center) */}
+      {showAlertsModal && (
+        <div
+          onClick={closeAlertsModal}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1200
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 520,
+              maxWidth: '92%',
+              borderRadius: 12,
+              padding: 18,
+              background: 'white',
+              border: '3px solid #e74c3c',
+              boxShadow: '0 18px 60px rgba(0,0,0,0.28)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>Low Stock Alerts</h3>
+            </div>
+
+            <div style={{ maxHeight: 320, overflowY: 'auto', paddingRight: 6 }}>
+              {lowStockItems.length === 0 ? (
+                <div style={{ color: 'var(--muted)' }}>No low-stock items.</div>
+              ) : (
+                lowStockItems.map(item => (
+                  <div
+                    key={item.id}
+                    onClick={() => goToInventoryItem(item)}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      marginBottom: 8,
+                      cursor: 'pointer',
+                      background: 'linear-gradient(90deg, rgba(255,255,255,0.98), rgba(255,248,248,0.96))',
+                      border: '1px solid rgba(231,76,60,0.12)'
+                    }}
+                    title={`Go to inventory: ${item.item_name}`}
+                  >
+                    <div style={{ fontWeight: 700 }}>{item.item_name}</div>
+                    <div style={{ color: 'var(--muted)' }}>{item.stock_quantity} {item.unit || ''} left</div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button className="btn secondary" onClick={closeAlertsModal}>Close</button>
+              <button
+                className="btn"
+                onClick={() => {
+                  // navigate to inventory page (no specific focus)
+                  navigate('/inventory');
+                  setShowAlertsModal(false);
+                }}
+              >
+                Go to Inventory
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Export success */}
       {showExportSuccessModal && (
