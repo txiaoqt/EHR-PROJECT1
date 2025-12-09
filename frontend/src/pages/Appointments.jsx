@@ -302,7 +302,7 @@ const Appointments = () => {
     for (let day = 1; day <= last.getDate(); day++) days.push(day);
 
     return (
-      <div style={{ width: 320, height: 320, display: 'flex', flexDirection: 'column', padding: 12, boxSizing: 'border-box' }}>
+      <div style={{ width: '100%', maxWidth: 340, height: 320, display: 'flex', flexDirection: 'column', padding: 12, boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <button className="btn small" onClick={() => setViewDate(new Date(year, month - 1, 1))}>←</button>
           <strong style={{ textAlign: 'center' }}>{viewDate.toLocaleString(undefined, { month: 'short', year: 'numeric' })}</strong>
@@ -338,7 +338,7 @@ const Appointments = () => {
       const isToday = key === todayKey;
       const isSelected = key === selectedDate;
       const styles = {
-        minWidth: 105,
+        minWidth: 80, // reduced to avoid overflow
         padding: '12px 10px',
         borderRadius: 10,
         border: isSelected ? '1px solid var(--accent)' : '1px solid transparent',
@@ -361,7 +361,8 @@ const Appointments = () => {
   };
 
   return (
-    <main className="main">
+    // prevent horizontal scrolling at the page level while keeping content responsive
+    <main className="main" style={{ overflowX: 'hidden' }}>
       <section className="page">
         {/* Header card with description below header */}
         <div className="card" style={{ marginBottom: 12, padding: 16 }}>
@@ -384,9 +385,15 @@ const Appointments = () => {
         </div>
 
         {/* LEFT: Calendar | RIGHT: Cards above Week (two-row layout beside calendar) */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
+        <div style={{
+          display: 'flex',
+          gap: 12,
+          marginBottom: 12,
+          alignItems: 'flex-start',
+          flexWrap: 'wrap' // allow wrapping so items align under header instead of forcing horizontal scroll
+        }}>
           {/* Calendar on the left */}
-          <div className="card" style={{ padding: 12, width: 340, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ padding: 12, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div>
               <h3 style={{ marginTop: 0, marginBottom: 8 }}>Calendar</h3>
               {renderCalendar()}
@@ -394,7 +401,7 @@ const Appointments = () => {
           </div>
 
           {/* Right column: top = 2x2 cards; bottom = week tracker */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10, minWidth: 0 }}>
             {/* Cards grid: 2 columns x 2 rows */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="card" style={{ padding: 12 }}>
@@ -512,8 +519,6 @@ const Appointments = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <h3 style={{ margin: 0 }}>New Appointment</h3>
               </div>
-
-              
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <input
