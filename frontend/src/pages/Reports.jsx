@@ -1,6 +1,7 @@
 // src/pages/Reports.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient.js';
+import { useAuth } from '../AuthContext.jsx';
 import autoTable from 'jspdf-autotable';
 import jsPDF from 'jspdf';
 import Chart from 'chart.js/auto';
@@ -32,6 +33,7 @@ ChartJS.register(
 const DEFAULT_LOOKBACK_DAYS = 30;
 
 const Reports = () => {
+  const { user } = useAuth(); // get user for password verification
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [type, setType] = useState('census');
@@ -42,6 +44,12 @@ const Reports = () => {
   const [exporting, setExporting] = useState(false);
   const [dateError, setDateError] = useState('');
   const mountedRef = useRef(false);
+
+  // password confirm for export
+  const [showPasswordConfirmModal, setShowPasswordConfirmModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [pendingExport, setPendingExport] = useState(null);
 
   useEffect(() => {
     const today = new Date();
@@ -175,6 +183,46 @@ const Reports = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Password confirm for export
+  const requestExport = (exportFunc) => {
+    if (!user) return;
+    setPendingExport(() => exportFunc);
+    setShowPasswordConfirmModal(true);
+  };
+
+  const confirmPassword = async () => {
+    try {
+      const { data: dbUser, error } = await supabase
+        .from('users')
+        .select('password')
+        .eq('email', user.email)
+        .single();
+
+      if (error || !dbUser) {
+        setPasswordError('Authentication failed');
+        return;
+      }
+
+      if (passwordInput === dbUser.password) {
+        setShowPasswordConfirmModal(false);
+        setPasswordInput('');
+        setPasswordError('');
+        pendingExport();
+        setPendingExport(null);
+      } else {
+        setPasswordError('Incorrect password');
+      }
+    } catch (err) {
+      setPasswordError('Authentication failed');
+    }
+  };
+
+  const closePasswordModal = () => {
+    setShowPasswordConfirmModal(false);
+    setPasswordInput('');
+    setPasswordError('');
   };
 
   // CSV exporter
@@ -526,9 +574,9 @@ const Reports = () => {
                     border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
                     borderRadius: 6, zIndex: 2000, overflow: 'hidden', minWidth: 220
                   }}>
-                    <button onClick={() => exportCsv('full')} style={menuBtnStyle} disabled={!reportData || reportData.length === 0}>CSV (Full)</button>
-                    <button onClick={() => exportPdf('selected')} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Selected)</button>
-                    <button onClick={() => exportPdf('full')} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Full)</button>
+                    <button onClick={() => requestExport(() => exportCsv('full'))} style={menuBtnStyle} disabled={!reportData || reportData.length === 0}>CSV (Full)</button>
+                    <button onClick={() => requestExport(() => exportPdf('selected'))} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Selected)</button>
+                    <button onClick={() => requestExport(() => exportPdf('full'))} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Full)</button>
                   </div>
                 )}
               </div>
@@ -610,6 +658,29 @@ const Reports = () => {
           </div>
         </div>
       </section>
+
+      {/* ---------- Password Confirm Modal ---------- */}
+      {showPasswordConfirmModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1400 }}>
+          <div style={{ background:'white', padding:24, borderRadius:12, maxWidth:400, width:'90%' }}>
+            <h3 style={{ marginTop:0 }}>Confirm Password</h3>
+            <p>Please enter your password to proceed with the export.</p>
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={(e)=>setPasswordInput(e.target.value)}
+              placeholder="Enter your password"
+              className="input"
+              style={{ width:'100%', marginBottom:12 }}
+            />
+            {passwordError && <div style={{ color:'red', marginBottom:12 }}>{passwordError}</div>}
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+              <button className="btn secondary" onClick={closePasswordModal}>Cancel</button>
+              <button className="btn" onClick={confirmPassword}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };
