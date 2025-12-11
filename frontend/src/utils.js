@@ -143,10 +143,26 @@ export const formatWeight = (kg, useMetric = true) => {
 };
 
 // Audit logging utilities
-export const logAudit = async (action, description, userName = 'Dr. Rivera') => {
+export const logAudit = async (action, description, userName) => {
   try {
+    // Try to get current user if not provided
+    let finalUserName = userName;
+    if (!finalUserName) {
+      try {
+        // Try to get user from localStorage or other global source
+        const authUser = localStorage.getItem('authUser');
+        if (authUser) {
+          const user = JSON.parse(authUser);
+          finalUserName = user.name || user.email || 'Unknown User';
+        }
+      } catch (e) {
+        // Fallback to current timestamp as identifier if needed
+        finalUserName = `User_${Date.now()}`;
+      }
+    }
+
     const { error } = await supabase.from('audit_logs').insert([{
-      user_name: userName,
+      user_name: finalUserName,
       action,
       description
     }]);

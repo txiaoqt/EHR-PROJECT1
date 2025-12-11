@@ -491,14 +491,16 @@ const Appointments = () => {
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                           <button className="btn" onClick={() => handleAction(appt)}> Open </button>
 
-                          {/* Delete button */}
-                          <button
-                            className="btn secondary"
-                            onClick={() => openDeleteModal(appt)}
-                            title="Delete this appointment"
-                          >
-                            Delete
-                          </button>
+                          {/* Delete button - only available to physicians */}
+                          {user?.role === 'physician' && (
+                            <button
+                              className="btn secondary"
+                              onClick={() => openDeleteModal(appt)}
+                              title="Delete this appointment"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

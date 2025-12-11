@@ -566,20 +566,23 @@ const Reports = () => {
                 <option value="visits">Visit Trends</option>
               </select>
 
-              <div style={{ position: 'relative' }}>
-                <button className="btn" onClick={() => setShowExportMenu(s => !s)}>Export</button>
-                {showExportMenu && (
-                  <div style={{
-                    position: 'absolute', right: 0, marginTop: 6, background: 'var(--panel)',
-                    border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
-                    borderRadius: 6, zIndex: 2000, overflow: 'hidden', minWidth: 220
-                  }}>
-                    <button onClick={() => requestExport(() => exportCsv('full'))} style={menuBtnStyle} disabled={!reportData || reportData.length === 0}>CSV (Full)</button>
-                    <button onClick={() => requestExport(() => exportPdf('selected'))} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Selected)</button>
-                    <button onClick={() => requestExport(() => exportPdf('full'))} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Full)</button>
-                  </div>
-                )}
-              </div>
+              {/* Export menu only available for physicians - contains sensitive patient data */}
+              {user?.role === 'physician' && (
+                <div style={{ position: 'relative' }}>
+                  <button className="btn" onClick={() => setShowExportMenu(s => !s)}>Export</button>
+                  {showExportMenu && (
+                    <div style={{
+                      position: 'absolute', right: 0, marginTop: 6, background: 'var(--panel)',
+                      border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
+                      borderRadius: 6, zIndex: 2000, overflow: 'hidden', minWidth: 220
+                    }}>
+                      <button onClick={() => requestExport(() => exportCsv('full'))} style={menuBtnStyle} disabled={!reportData || reportData.length === 0}>CSV (Full)</button>
+                      <button onClick={() => requestExport(() => exportPdf('selected'))} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Selected)</button>
+                      <button onClick={() => requestExport(() => exportPdf('full'))} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Full)</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

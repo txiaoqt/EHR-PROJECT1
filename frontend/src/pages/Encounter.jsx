@@ -137,7 +137,7 @@ const Encounter = () => {
 
       if (error) throw error;
 
-      await logAudit('Encounter Creation', `Encounter for ${form.patient} - ${form.complaint}`);
+      await logAudit('Encounter Creation', `Encounter for ${form.patient} - ${form.complaint}`, form.clinician);
       window.dispatchEvent(new CustomEvent('encounterAdded'));
 
       // reset only encounter fields (keep clinician)
@@ -395,4 +395,4 @@ const Encounter = () => {
   );
 };
 
-export default Encounter;  
+export default Encounter;

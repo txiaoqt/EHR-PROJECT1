@@ -81,7 +81,7 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
     appointment_date: '',
     appointment_time: '',
     type: 'Consult',
-    clinician_name: user ? user.name : '', // initialize from useAuth if available
+    clinician_name: '', // will be set by resolveClinicianName()
     status: 'Scheduled'
   });
   const [savingAppt, setSavingAppt] = useState(false);
@@ -479,7 +479,7 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
   const closeNewModal = () => {
     setShowNewApptModal(false);
     setPatientSearch(''); setPatientSuggestions([]); setSelectedName('');
-    setNewAppt({ patient_id:'', appointment_date:'', appointment_time:'', type:'Consult', clinician_name: user ? user.name : '', status:'Scheduled' });
+    setNewAppt({ patient_id:'', appointment_date:'', appointment_time:'', type:'Consult', clinician_name: '', status:'Scheduled' });
   };
   const handleNewApptChange = (e) => {
     const { id, value } = e.target;
@@ -497,7 +497,7 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
       // fire global event so other pages update
       window.dispatchEvent(new Event('appointmentAdded'));
       // audit log if available
-      try { await logAudit && logAudit('Appointment Creation', `Added appointment ${newAppt.patient_id} on ${newAppt.appointment_date} ${newAppt.appointment_time}`); } catch(e){/*ignore*/}
+      try { await logAudit && logAudit('Appointment Creation', `Added appointment ${newAppt.patient_id} on ${newAppt.appointment_date} ${newAppt.appointment_time}`, user?.name || 'Unknown'); } catch(e){/*ignore*/}
 
       setSavingAppt(false);
       closeNewModal();
@@ -789,7 +789,11 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               <button className="btn" onClick={() => navigate('/patients')}>Register Patient</button>
               <button className="btn" onClick={() => navigate('/encounter')}>New Encounter</button>
-              <button className="btn" onClick={requestExportCensus}>Export Census</button>
+
+              {/* Export Census only available for physicians due to sensitive data */}
+              {user?.role === 'physician' && (
+                <button className="btn" onClick={requestExportCensus}>Export Census</button>
+              )}
             </div>
           </div>
 

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
+import { useAuth } from '../AuthContext.jsx';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -28,6 +29,7 @@ ChartJS.register(
 );
 
 const PatientProfile = () => {
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
@@ -319,25 +321,31 @@ const PatientProfile = () => {
                       }}
                       role="menu"
                     >
-                      <button
-                        className="btn"
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', textAlign: 'left', color: 'inherit' }}
-                        onClick={() => { setShowMore(false); exportPdf(); }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Export PDF
-                      </button>
+                      {/* Only show export PDF for physicians, as it contains sensitive data */}
+                      {user?.role === 'physician' && (
+                        <button
+                          className="btn"
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', textAlign: 'left', color: 'inherit' }}
+                          onClick={() => { setShowMore(false); exportPdf(); }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          Export PDF
+                        </button>
+                      )}
 
                       <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '6px 0' }} />
 
-                      <button
-                        className="btn"
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', textAlign: 'left', color: 'var(--danger)' }}
-                        onClick={() => { setShowMore(false); setShowDeleteModal(true); }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                        Delete patient
-                      </button>
+                      {/* Only show delete button for physicians (doctors only) */}
+                      {user?.role === 'physician' && (
+                        <button
+                          className="btn"
+                          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', textAlign: 'left', color: 'var(--danger)' }}
+                          onClick={() => { setShowMore(false); setShowDeleteModal(true); }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                          Delete patient
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

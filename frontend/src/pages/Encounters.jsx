@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
+import { useAuth } from '../AuthContext.jsx';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import tupehrlogo from '../assets/images/tupehrlogo.jpg';
@@ -33,6 +34,7 @@ function toManilaDateKey(dateInput) {
 const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
 
 const Encounters = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [encounters, setEncounters] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -398,7 +400,10 @@ const Encounters = () => {
                   <option value="oldest">Oldest first</option>
                 </select>
 
-                <button className="btn secondary" onClick={exportPdfLast30Days}>Export</button>
+                {/* Only show export for physicians, as it contains sensitive data */}
+                {user?.role === 'physician' && (
+                  <button className="btn secondary" onClick={exportPdfLast30Days}>Export</button>
+                )}
 
                 <button className="btn" onClick={() => navigate('/encounter')}>Create New Encounter</button>
               </div>
@@ -498,14 +503,16 @@ const Encounters = () => {
                             <td style={{ padding: 10, display: 'flex', gap: 8 }}>
                               <button className="btn" onClick={() => navigate(`/patient-profile?id=${enc.patient_id}`)}>Profile</button>
 
-                              {/* DELETE BUTTON */}
-                              <button
-                                className="btn secondary"
-                                onClick={() => openDeleteModal(enc)}
-                                title="Delete Encounter"
-                              >
-                                Delete
-                              </button>
+                              {/* DELETE BUTTON - only available to physicians */}
+                              {user?.role === 'physician' && (
+                                <button
+                                  className="btn secondary"
+                                  onClick={() => openDeleteModal(enc)}
+                                  title="Delete Encounter"
+                                >
+                                  Delete
+                                </button>
+                              )}
                             </td>
                           </tr>
                         ))

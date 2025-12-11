@@ -12,7 +12,7 @@ const Login = () => {
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Ensure the visible reCAPTCHA v2 checkbox always renders
+  // Load and render reCAPTCHA v2 checkbox widget
   React.useEffect(() => {
     const tryRender = () => {
       const el = document.querySelector('.g-recaptcha');
@@ -24,7 +24,7 @@ const Login = () => {
           });
         } catch (e) {
           // ignore rendering errors silently
-          // console.warn('reCAPTCHA render issue', e);
+          console.warn('reCAPTCHA render issue', e);
         }
         return true;
       }
@@ -50,8 +50,7 @@ const Login = () => {
     setMsg('');
 
     try {
-      // Block login unless reCAPTCHA v2 is completed
-      // (this uses the checkbox's response)
+      // Verify reCAPTCHA v2 response
       const captchaToken = typeof window.grecaptcha !== 'undefined' ? window.grecaptcha.getResponse() : '';
       if (!captchaToken) {
         setMsg('Please complete the CAPTCHA');
@@ -281,7 +280,7 @@ const Login = () => {
                 />
               </div>
 
-              {/* add the visible reCAPTCHA v2 checkbox widget (no other logic changed) */}
+              {/* reCAPTCHA v2 checkbox widget */}
               <div style={{ margin: '12px 0' }}>
                 <div
                   className="g-recaptcha"
