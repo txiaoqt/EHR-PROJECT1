@@ -6,12 +6,19 @@ import { logAudit } from '../utils.js';
 import { useAuth } from '../AuthContext.jsx';
 
 // simple student search (keeps your original query behaviour)
+// NOTE: we sanitize the query to remove % and _ before using ilike patterns.
+const sanitizeIlikeQuery = (q) => {
+  if (!q || typeof q !== 'string') return '';
+  return q.replace(/[%_]/g, '').trim();
+};
+
 const fetchStudents = async (query) => {
-  if (!query) return [];
+  const safe = sanitizeIlikeQuery(query);
+  if (!safe) return [];
   const { data } = await supabase
     .from('students')
     .select('id, name, year')
-    .or(`name.ilike.%${query}%,id.ilike.%${query}%`)
+    .or(`name.ilike.%${safe}%,id.ilike.%${safe}%`)
     .limit(10);
   return data || [];
 };
@@ -52,6 +59,123 @@ const Encounter = () => {
   const searchTimer = useRef(null);
 
   const [isSaving, setIsSaving] = useState(false);
+
+  // ---------- Vitals validation constraints & helpers (ADDED) ----------
+  const VITAL_LIMITS = {
+    temp: { min: 30, max: 45, decimals: 1 },    // Celsius
+    pulse: { min: 20, max: 220 },               // bpm
+    weight: { min: 1, max: 300, decimals: 1 },  // kg
+    bp: { sysMax: 300, diaMax: 200 }
+  };
+
+  // Allow decimal numbers with at most one dot and optionally limit decimals.
+  const sanitizeDecimalInput = (value, maxDecimals = 1, maxValue = Infinity) => {
+    if (value == null) return '';
+    let v = value.toString();
+    // remove everything except digits and dot
+    v = v.replace(/[^\d.]/g, '');
+    // collapse multiple dots
+    const parts = v.split('.');
+    if (parts.length > 1) {
+      const integer = parts.shift();
+      const decimal = parts.join(''); // merge subsequent dots content
+      v = integer + '.' + decimal;
+    }
+    // enforce max decimals
+    if (maxDecimals >= 0 && v.includes('.')) {
+      const [intPart, decPart] = v.split('.');
+      v = intPart + '.' + decPart.slice(0, maxDecimals);
+    }
+    // remove leading zeros (but keep "0" or "0.x")
+    if (v && !v.startsWith('0.')) {
+      v = v.replace(/^0+(?=\d)/, '');
+    }
+    // enforce numeric max
+    const num = Number(v);
+    if (!Number.isNaN(num) && num > maxValue) {
+      return String(maxValue);
+    }
+    return v;
+  };
+
+  // Allow digits only
+  const sanitizeIntegerInput = (value, maxValue = Infinity) => {
+    if (value == null) return '';
+    let v = value.toString();
+    v = v.replace(/[^\d]/g, '');
+    // remove leading zeros
+    v = v.replace(/^0+(?=\d)/, '');
+    const num = v === '' ? 0 : Number(v);
+    if (num > maxValue) return String(maxValue);
+    return v;
+  };
+
+  // BP input sanitizer: allow digits and a single slash '/'. Remove other chars.
+  // Normalize: keep at most one slash; trim leading zeros in each part; enforce maxima.
+  const sanitizeBPInput = (value) => {
+    if (value == null) return '';
+    let v = value.toString();
+    // remove everything except digits and slash
+    v = v.replace(/[^\d/]/g, '');
+    // collapse multiple slashes to one
+    v = v.replace(/\/+/g, '/');
+    // ensure only one slash
+    const parts = v.split('/');
+    if (parts.length > 2) {
+      // join extras into second part
+      v = parts[0] + '/' + parts.slice(1).join('');
+    }
+    // if we have both parts, enforce numeric maxima
+    if (v.includes('/')) {
+      const [sysRaw, diaRaw] = v.split('/');
+      const sys = (sysRaw || '').replace(/^0+(?=\d)/, '') || '';
+      const dia = (diaRaw || '').replace(/^0+(?=\d)/, '') || '';
+      const sysNum = sys === '' ? null : Number(sys);
+      const diaNum = dia === '' ? null : Number(dia);
+      let sysStr = sys;
+      let diaStr = dia;
+      if (sysNum !== null && !Number.isNaN(sysNum) && sysNum > VITAL_LIMITS.bp.sysMax) sysStr = String(VITAL_LIMITS.bp.sysMax);
+      if (diaNum !== null && !Number.isNaN(diaNum) && diaNum > VITAL_LIMITS.bp.diaMax) diaStr = String(VITAL_LIMITS.bp.diaMax);
+      v = (sysStr || '') + '/' + (diaStr || '');
+    } else {
+      // only systolic being typed; trim leading zeros
+      v = v.replace(/^0+(?=\d)/, '');
+      // enforce systolic max if present
+      const n = v === '' ? null : Number(v);
+      if (n !== null && !Number.isNaN(n) && n > VITAL_LIMITS.bp.sysMax) v = String(VITAL_LIMITS.bp.sysMax);
+    }
+    return v;
+  };
+
+  const validateVitals = (vals) => {
+    // temp, pulse, weight are optional; if provided must be valid
+    if (vals.temp) {
+      const num = Number(vals.temp);
+      if (Number.isNaN(num)) return `Temperature must be a number between ${VITAL_LIMITS.temp.min} and ${VITAL_LIMITS.temp.max}.`;
+      if (num < VITAL_LIMITS.temp.min || num > VITAL_LIMITS.temp.max) return `Temperature out of range (${VITAL_LIMITS.temp.min}-${VITAL_LIMITS.temp.max} °C).`;
+    }
+    if (vals.pulse) {
+      const num = Number(vals.pulse);
+      if (!/^\d+$/.test(vals.pulse) || Number.isNaN(num)) return `Pulse must be a whole number (bpm).`;
+      if (num < VITAL_LIMITS.pulse.min || num > VITAL_LIMITS.pulse.max) return `Pulse out of range (${VITAL_LIMITS.pulse.min}-${VITAL_LIMITS.pulse.max} bpm).`;
+    }
+    if (vals.weight) {
+      const num = Number(vals.weight);
+      if (Number.isNaN(num)) return `Weight must be a number between ${VITAL_LIMITS.weight.min} and ${VITAL_LIMITS.weight.max}.`;
+      if (num < VITAL_LIMITS.weight.min || num > VITAL_LIMITS.weight.max) return `Weight out of range (${VITAL_LIMITS.weight.min}-${VITAL_LIMITS.weight.max} kg).`;
+    }
+    if (vals.bp) {
+      // must be like 120/80 ; disallow letters and other characters (sanitizer already limits)
+      if (!/^\d{1,3}\/\d{1,3}$/.test(vals.bp)) return 'BP must be numeric in the format SYS/DIA (e.g. 120/80). Use only the / symbol (no letters or other characters).';
+      const [sysS, diaS] = vals.bp.split('/');
+      const sys = Number(sysS), dia = Number(diaS);
+      if (Number.isNaN(sys) || Number.isNaN(dia)) return 'BP contains invalid numbers.';
+      if (sys < 30 || sys > VITAL_LIMITS.bp.sysMax) return `Systolic out of range (30-${VITAL_LIMITS.bp.sysMax}).`;
+      if (dia < 20 || dia > VITAL_LIMITS.bp.diaMax) return `Diastolic out of range (20-${VITAL_LIMITS.bp.diaMax}).`;
+    }
+    return null;
+  };
+  // ------------------------------------------------------------------
 
   // debounced student search
   useEffect(() => {
@@ -100,6 +224,16 @@ const Encounter = () => {
   const validateForm = () => {
     if (!form.patient) return 'Please select a patient (pick from suggestions).';
     if (!form.complaint || form.complaint.trim().length < 2) return 'Chief complaint is required.';
+
+    // vitals validation
+    const vitalsValidation = validateVitals({
+      temp: form.temp,
+      pulse: form.pulse,
+      bp: form.bp,
+      weight: form.weight
+    });
+    if (vitalsValidation) return vitalsValidation;
+
     return null;
   };
 
@@ -331,32 +465,45 @@ const Encounter = () => {
                     className="input"
                     placeholder="Temperature (°C) — e.g., 37.8"
                     value={form.temp}
-                    onChange={e => setField('temp', e.target.value)}
+                    onChange={e => {
+                      const sanitized = sanitizeDecimalInput(e.target.value, VITAL_LIMITS.temp.decimals, VITAL_LIMITS.temp.max);
+                      setField('temp', sanitized);
+                    }}
                     inputMode="decimal"
                   />
                   <input
                     className="input"
                     placeholder="Pulse (bpm) — e.g., 80"
                     value={form.pulse}
-                    onChange={e => setField('pulse', e.target.value)}
+                    onChange={e => {
+                      const sanitized = sanitizeIntegerInput(e.target.value, VITAL_LIMITS.pulse.max);
+                      setField('pulse', sanitized);
+                    }}
                     inputMode="numeric"
                   />
                   <input
                     className="input"
                     placeholder="BP — e.g., 120/80"
                     value={form.bp}
-                    onChange={e => setField('bp', e.target.value)}
+                    onChange={e => {
+                      const sanitized = sanitizeBPInput(e.target.value);
+                      setField('bp', sanitized);
+                    }}
+                    // important: keep type=text so user can enter slash
                   />
                   <input
                     className="input"
                     placeholder="Weight (kg) — optional"
                     value={form.weight}
-                    onChange={e => setField('weight', e.target.value)}
+                    onChange={e => {
+                      const sanitized = sanitizeDecimalInput(e.target.value, VITAL_LIMITS.weight.decimals, VITAL_LIMITS.weight.max);
+                      setField('weight', sanitized);
+                    }}
                     inputMode="decimal"
                   />
                 </div>
                 <div style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)' }}>
-                  Record the most recent / measured vitals. Use numbers only.
+                  Record the most recent / measured vitals. Use numbers only. BP must use a single slash (/) as shown: <strong>SYS/DIA</strong>.
                 </div>
               </div>
 
