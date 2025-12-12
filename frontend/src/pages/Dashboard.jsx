@@ -66,11 +66,6 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
   // export modal
   const [showExportSuccessModal, setShowExportSuccessModal] = useState(false);
 
-  // password confirm for export
-  const [showPasswordConfirmModal, setShowPasswordConfirmModal] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-
   // ---- New appointment modal state (Dashboard) ----
   const [showNewApptModal, setShowNewApptModal] = useState(false);
   const [patientSearch, setPatientSearch] = useState('');
@@ -524,42 +519,9 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
   };
   const closeAlertsModal = () => setShowAlertsModal(false);
 
-  // Password confirm for export
-  const requestExportCensus = () => {
-    if (!user) return;
-    setShowPasswordConfirmModal(true);
-  };
-
-  const confirmPassword = async () => {
-    try {
-      const { data: dbUser, error } = await supabase
-        .from('users')
-        .select('password')
-        .eq('email', user.email)
-        .single();
-
-      if (error || !dbUser) {
-        setPasswordError('Authentication failed');
-        return;
-      }
-
-      if (passwordInput === dbUser.password) {
-        setShowPasswordConfirmModal(false);
-        setPasswordInput('');
-        setPasswordError('');
-        await exportCensus();
-      } else {
-        setPasswordError('Incorrect password');
-      }
-    } catch (err) {
-      setPasswordError('Authentication failed');
-    }
-  };
-
-  const closePasswordModal = () => {
-    setShowPasswordConfirmModal(false);
-    setPasswordInput('');
-    setPasswordError('');
+  // Password confirm for export — now simplified to export immediately
+  const requestExportCensus = async () => {
+    await exportCensus();
   };
 
   // When clicking a low stock item in the modal or card, navigate to inventory and pass focus
@@ -940,29 +902,6 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
               <button className="btn" onClick={submitNewAppointment} disabled={savingAppt || !newAppt.patient_id || !newAppt.appointment_date || !newAppt.appointment_time}>
                 {savingAppt ? 'Saving…' : 'Save Appointment'}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ---------- Password Confirm Modal ---------- */}
-      {showPasswordConfirmModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1400 }}>
-          <div style={{ background:'white', padding:24, borderRadius:12, maxWidth:400, width:'90%' }}>
-            <h3 style={{ marginTop:0 }}>Confirm Password</h3>
-            <p>Please enter your password to proceed with the export.</p>
-            <input
-              type="password"
-              value={passwordInput}
-              onChange={(e)=>setPasswordInput(e.target.value)}
-              placeholder="Enter your password"
-              className="input"
-              style={{ width:'100%', marginBottom:12 }}
-            />
-            {passwordError && <div style={{ color:'red', marginBottom:12 }}>{passwordError}</div>}
-            <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-              <button className="btn secondary" onClick={closePasswordModal}>Cancel</button>
-              <button className="btn" onClick={confirmPassword}>Confirm</button>
             </div>
           </div>
         </div>
