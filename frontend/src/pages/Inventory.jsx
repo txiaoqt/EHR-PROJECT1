@@ -35,6 +35,49 @@ const Inventory = () => {
   const [deleteMessage, setDeleteMessage] = useState('');
   const [deleteMessageType, setDeleteMessageType] = useState('');
 
+  // ---------- Validation constraints & helpers (ADDED) ----------
+  const NAME_MAX = 100;
+  const STOCK_MAX = 100000;
+  const REORDER_MAX = 10000;
+  const ADJUST_QTY_MAX = 100000;
+  // Allow letters, numbers, spaces and a few safe punctuation for item names and reasons
+  const nameAllowedRegex = /[^A-Za-z0-9 \.\-,()\/]/g; // we will strip everything not allowed
+  const reasonAllowedRegex = /[^A-Za-z0-9 \.\-,()]/g;
+
+  const sanitizeName = (v) => {
+    if (v == null) return '';
+    let s = v.toString();
+    // remove disallowed characters
+    s = s.replace(nameAllowedRegex, '');
+    // collapse multiple spaces
+    s = s.replace(/\s+/g, ' ');
+    // trim and enforce max length
+    s = s.trim().slice(0, NAME_MAX);
+    return s;
+  };
+
+  const sanitizeIntegerInput = (value, maxValue = Infinity) => {
+    if (value == null) return '';
+    let v = value.toString();
+    // remove non-digits
+    v = v.replace(/[^\d]/g, '');
+    v = v.replace(/^0+(?=\d)/, ''); // strip leading zeros
+    if (v === '') return '';
+    const num = Number(v);
+    if (!Number.isNaN(num) && num > maxValue) return String(maxValue);
+    return v;
+  };
+
+  const sanitizeReason = (v) => {
+    if (v == null) return '';
+    let s = v.toString();
+    s = s.replace(reasonAllowedRegex, '');
+    s = s.replace(/\s+/g, ' ');
+    s = s.trim().slice(0, 200); // cap reason length
+    return s;
+  };
+  // ----------------------------------------------------------------
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -82,8 +125,24 @@ const Inventory = () => {
 
   const addStock = () => setShowAddModal(true);
 
+  // handle new item changes with sanitization
   const handleNewItemChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'item_name') {
+      setNewItem(prev => ({ ...prev, item_name: sanitizeName(value) }));
+      return;
+    }
+    if (name === 'stock_quantity') {
+      const sanitized = sanitizeIntegerInput(value, STOCK_MAX);
+      setNewItem(prev => ({ ...prev, stock_quantity: sanitized }));
+      return;
+    }
+    if (name === 'reorder_level') {
+      const sanitized = sanitizeIntegerInput(value, REORDER_MAX);
+      setNewItem(prev => ({ ...prev, reorder_level: sanitized }));
+      return;
+    }
+    // unit & category are safe selects
     setNewItem(prev => ({ ...prev, [name]: value }));
   };
 
@@ -91,29 +150,45 @@ const Inventory = () => {
     setModalMessage('');
     setModalMessageType('');
 
-    if (!newItem.item_name.trim()) {
-      setModalMessage('Item name is required.');
+    const sanitizedName = sanitizeName(newItem.item_name || '');
+    if (!sanitizedName) {
+      setModalMessage('Item name is required and must not contain special characters.');
+      setModalMessageType('error');
+      return;
+    }
+    if (sanitizedName.length > NAME_MAX) {
+      setModalMessage(`Item name is too long (max ${NAME_MAX} characters).`);
       setModalMessageType('error');
       return;
     }
 
-    const stockQty = Number(newItem.stock_quantity);
-    const reorderLvl = Number(newItem.reorder_level);
+    const stockQty = Number(newItem.stock_quantity || 0);
+    const reorderLvl = Number(newItem.reorder_level || 0);
 
     if (isNaN(stockQty) || stockQty < 0) {
-      setModalMessage('Stock quantity must be a positive number.');
+      setModalMessage('Stock quantity must be a positive integer.');
+      setModalMessageType('error');
+      return;
+    }
+    if (stockQty > STOCK_MAX) {
+      setModalMessage(`Stock quantity exceeds maximum allowed (${STOCK_MAX}).`);
       setModalMessageType('error');
       return;
     }
 
     if (isNaN(reorderLvl) || reorderLvl <= 0) {
-      setModalMessage('Reorder level must be a positive number greater than 0.');
+      setModalMessage('Reorder level must be a positive integer greater than 0.');
+      setModalMessageType('error');
+      return;
+    }
+    if (reorderLvl > REORDER_MAX) {
+      setModalMessage(`Reorder level exceeds maximum allowed (${REORDER_MAX}).`);
       setModalMessageType('error');
       return;
     }
 
-    // Check for duplicate item name
-    const exists = items.find(item => (item.item_name || '').toLowerCase() === newItem.item_name.toLowerCase());
+    // Check for duplicate item name (use sanitized names for comparison)
+    const exists = items.find(item => (item.item_name || '').toLowerCase() === sanitizedName.toLowerCase());
     if (exists) {
       setModalMessage('An item with this name already exists.');
       setModalMessageType('error');
@@ -122,7 +197,7 @@ const Inventory = () => {
 
     try {
       const { error } = await supabase.from('inventory').insert([{
-        item_name: newItem.item_name.trim(),
+        item_name: sanitizedName,
         category: newItem.category,
         stock_quantity: stockQty,
         unit: newItem.unit,
@@ -132,7 +207,7 @@ const Inventory = () => {
 
       // Add transaction
       await supabase.from('inventory_transactions').insert([{
-        item_name: newItem.item_name.trim(),
+        item_name: sanitizedName,
         transaction_type: 'in',
         quantity: stockQty,
         reason: 'New item added',
@@ -140,7 +215,7 @@ const Inventory = () => {
       }]);
 
       // Log audit entry
-      await logAudit('Inventory Item Addition', `Added new inventory item: ${newItem.item_name.trim()} with ${stockQty} ${newItem.unit}`);
+      await logAudit('Inventory Item Addition', `Added new inventory item: ${sanitizedName} with ${stockQty} ${newItem.unit}`);
 
       // Refresh data
       await refreshData();
@@ -178,6 +253,16 @@ const Inventory = () => {
 
   const handleAdjustChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'quantity') {
+      const sanitized = sanitizeIntegerInput(value, ADJUST_QTY_MAX);
+      setAdjustData(prev => ({ ...prev, quantity: sanitized }));
+      return;
+    }
+    if (name === 'reason') {
+      const sanitized = sanitizeReason(value);
+      setAdjustData(prev => ({ ...prev, reason: sanitized }));
+      return;
+    }
     setAdjustData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -186,21 +271,32 @@ const Inventory = () => {
     setAdjustModalMessageType('');
 
     if (!adjustData.reason.trim()) {
-      setAdjustModalMessage('Reason is required.');
+      setAdjustModalMessage('Reason is required and must not contain special characters.');
       setAdjustModalMessageType('error');
       return;
     }
 
     const qty = Number(adjustData.quantity);
     if (isNaN(qty) || qty <= 0) {
-      setAdjustModalMessage('Quantity must be a positive number.');
+      setAdjustModalMessage('Quantity must be a positive integer.');
+      setAdjustModalMessageType('error');
+      return;
+    }
+    if (qty > ADJUST_QTY_MAX) {
+      setAdjustModalMessage(`Quantity exceeds maximum allowed (${ADJUST_QTY_MAX}).`);
       setAdjustModalMessageType('error');
       return;
     }
 
-    const newQty = adjustData.type === 'add' ? Number(adjustItem.stock_quantity) + qty : Number(adjustItem.stock_quantity) - qty;
+    const currentQty = Number(adjustItem.stock_quantity) || 0;
+    const newQty = adjustData.type === 'add' ? currentQty + qty : currentQty - qty;
     if (newQty < 0) {
       setAdjustModalMessage('Cannot remove more than available stock.');
+      setAdjustModalMessageType('error');
+      return;
+    }
+    if (newQty > STOCK_MAX) {
+      setAdjustModalMessage(`Resulting stock would exceed maximum allowed (${STOCK_MAX}).`);
       setAdjustModalMessageType('error');
       return;
     }
@@ -349,8 +445,6 @@ const Inventory = () => {
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
               <h3 style={{ margin: 0 }}>Stock Levels</h3>
-              {/* NOTE: the search/category/Add Stock controls were intentionally removed from here
-                  because they're now in the header card above. */}
             </div>
 
             <div style={{ overflow: 'auto', marginBottom: '18px' }}>
@@ -517,6 +611,7 @@ const Inventory = () => {
                   value={newItem.stock_quantity}
                   onChange={handleNewItemChange}
                   min="0"
+                  max={STOCK_MAX}
                   required
                 />
               </div>
@@ -543,6 +638,7 @@ const Inventory = () => {
                   value={newItem.reorder_level}
                   onChange={handleNewItemChange}
                   min="1"
+                  max={REORDER_MAX}
                   required
                 />
               </div>
@@ -613,6 +709,7 @@ const Inventory = () => {
                   value={adjustData.quantity}
                   onChange={handleAdjustChange}
                   min="1"
+                  max={ADJUST_QTY_MAX}
                   required
                 />
               </div>
@@ -682,7 +779,7 @@ const Inventory = () => {
                 type="text"
                 placeholder="Type exact item name to confirm"
                 value={deleteConfirmName}
-                onChange={(e) => setDeleteConfirmName(e.target.value)}
+                onChange={(e) => setDeleteConfirmName(sanitizeName(e.target.value))}
               />
             </div>
 
@@ -700,8 +797,9 @@ const Inventory = () => {
             )}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="btn" onClick={submitDelete}>Delete Item</button>
+              {/* Cancel first, then Delete (swapped) */}
               <button className="btn" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+              <button className="btn" onClick={submitDelete}>Delete Item</button>
             </div>
           </div>
         </div>
