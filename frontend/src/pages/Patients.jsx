@@ -39,6 +39,36 @@ const Patients = () => {
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   };
 
+  // ---------- Validation / Sanitization helpers (ADDED) ----------
+  const NAME_MAX = 50;
+  const ID_MAX = 30;
+  // Allow letters, spaces, dots, apostrophes, hyphens (common in names)
+  const nameRegex = /^[a-zA-Z .'\-]+$/;
+  // Allow alphanumerics and a few safe punctuation for student IDs
+  const idRegex = /^[A-Za-z0-9\-_.]+$/;
+
+  const validateName = (name) => {
+    if (!name) return false;
+    if (typeof name !== 'string') return false;
+    if (name.length > NAME_MAX) return false;
+    // trim and test
+    return nameRegex.test(name.trim());
+  };
+
+  const validateId = (id) => {
+    if (!id) return false;
+    if (typeof id !== 'string') return false;
+    if (id.length > ID_MAX) return false;
+    return idRegex.test(id.trim());
+  };
+
+  // sanitize free-text search used in ilike patterns: remove % and _
+  const sanitizeIlikeQuery = (q) => {
+    if (!q || typeof q !== 'string') return '';
+    return q.replace(/[%_]/g, '').trim();
+  };
+  // ---------------------------------------------------------------
+
   // fetch patients
   const fetchPatients = async () => {
     setLoading(true);
@@ -73,11 +103,19 @@ const Patients = () => {
         setStudentSuggestions([]);
         return;
       }
+
+      // SANITIZE the query so `%` and `_` cannot change the pattern
+      const safeQ = sanitizeIlikeQuery(q);
+      if (!safeQ || safeQ.length < 2) {
+        setStudentSuggestions([]);
+        return;
+      }
+
       try {
         const { data, error } = await supabase
           .from('students')
           .select('id, name, year')
-          .or(`name.ilike.%${q}%,id.ilike.%${q}%`)
+          .or(`name.ilike.%${safeQ}%,id.ilike.%${safeQ}%`)
           .limit(8)
           .order('name', { ascending: true });
         if (error) console.error('Error fetching students:', error);
@@ -118,18 +156,33 @@ const Patients = () => {
 
   // create student (manual tab) - insert into students table and select it automatically
   const submitCreateStudent = async () => {
-    if (!manualStudent.name || !manualStudent.id) {
+    // VALIDATION: ensure name and id meet rules
+    const name = (manualStudent.name || '').trim();
+    const id = (manualStudent.id || '').trim();
+
+    if (!name || !id) {
       showToast('Student name and ID are required', 'error');
       return;
     }
+
+    if (!validateName(name)) {
+      showToast(`Invalid name. Letters, spaces, dot, apostrophe, and hyphen only. Max ${NAME_MAX} chars.`, 'error');
+      return;
+    }
+
+    if (!validateId(id)) {
+      showToast(`Invalid ID. Use letters, numbers, -, _, or . only. Max ${ID_MAX} chars.`, 'error');
+      return;
+    }
+
     try {
-      const payload = { id: manualStudent.id, name: manualStudent.name, year: Number(manualStudent.year || 1) };
+      const payload = { id: id, name: name, year: Number(manualStudent.year || 1) };
       const { error } = await supabase.from('students').insert([payload]).select();
 
       if (error) {
         // if insert fails (e.g. already exists) attempt to fetch existing
         console.warn('create student error', error);
-        const { data: existing, error: fetchErr } = await supabase.from('students').select('id,name,year').eq('id', manualStudent.id).single();
+        const { data: existing, error: fetchErr } = await supabase.from('students').select('id,name,year').eq('id', id).single();
         if (fetchErr) {
           console.error('fetch after insert fail', fetchErr);
           showToast('Failed to create student', 'error');
@@ -160,7 +213,20 @@ const Patients = () => {
       showToast('No patient selected', 'error');
       return;
     }
-    if (patients.some(p => (p.id || '').toString() === (s.id || '').toString())) {
+
+    // VALIDATION: verify preview fields are well-formed before registering
+    const sName = (s.name || '').toString().trim();
+    const sId = (s.id || '').toString().trim();
+    if (!validateName(sName)) {
+      showToast('Preview has invalid name — cannot register', 'error');
+      return;
+    }
+    if (!validateId(sId)) {
+      showToast('Preview has invalid ID — cannot register', 'error');
+      return;
+    }
+
+    if (patients.some(p => (p.id || '').toString() === (sId || '').toString())) {
       showToast('This student is already registered as a patient', 'error');
       return;
     }
@@ -169,8 +235,8 @@ const Patients = () => {
     try {
       const lastVisit = new Date().toISOString().split('T')[0];
       const payload = {
-        id: s.id,
-        name: s.name,
+        id: sId,
+        name: sName,
         year: s.year || 1,
         last_visit_date: lastVisit
       };
@@ -351,13 +417,23 @@ const Patients = () => {
                       <div style={{ display: 'grid', gap: 10 }}>
                         <div>
                           <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Full name</label>
-                          <input value={manualStudent.name} onChange={(e) => setManualStudent(prev => ({ ...prev, name: e.target.value }))} placeholder="Patient full name" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
+                          <input
+                            value={manualStudent.name}
+                            onChange={(e) => setManualStudent(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Patient full name"
+                            style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }}
+                          />
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
                           <div>
                             <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Student ID</label>
-                            <input value={manualStudent.id} onChange={(e) => setManualStudent(prev => ({ ...prev, id: e.target.value }))} placeholder="e.g. TUPM-XX-XXXX" style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }} />
+                            <input
+                              value={manualStudent.id}
+                              onChange={(e) => setManualStudent(prev => ({ ...prev, id: e.target.value }))}
+                              placeholder="e.g. TUPM-XX-XXXX"
+                              style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)' }}
+                            />
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>Year</label>
@@ -491,4 +567,3 @@ const Patients = () => {
 };
 
 export default Patients;
- 
