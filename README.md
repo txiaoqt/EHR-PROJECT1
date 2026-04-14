@@ -1,31 +1,53 @@
-# EHR Prototype
+# TUP Clinic EHR
 
-Frontend: HTML / CSS / JS  
-Backend: Python  
-Database: Supabase
+This project is a **React + Vite frontend** that talks **directly to Supabase**.
 
-This repository contains a minimal frontend scaffold for the EHR Prototype, including:
-- `frontend/public/` — static entry files (index, 404, manifest, favicon)
-- `frontend/src/` — source code (styles, components, pages, scripts)
-- `backend/` and `infra/` placeholders for later
+There is no Python backend in the current architecture.
 
-How to run (simple):
-1. From repo root:
-   ```bash
-   npm install --no-save live-server
-   npm run start
+## Stack
 
+- Frontend: React + Vite (`frontend/`)
+- Database/Auth/Storage: Supabase
+- Hosting: Vercel (configured via `vercel.json`)
 
----
+## Local Development
 
-# `package.json` (repo root)
-Path: `ehr-prototype/package.json`
-```json
-{
-  "name": "ehr-prototype",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "start": "npx live-server frontend/public --port=3000 --open=frontend/public/index.html"
-  }
-}
+From repo root:
+
+```bash
+npm install
+npm run dev
+```
+
+Or run directly inside `frontend/`:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Environment Variables
+
+Set these in `frontend/.env` (or in Vercel project settings):
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+See [frontend/.env.example](frontend/.env.example).
+
+## Build
+
+```bash
+npm run build
+```
+
+## Vercel Deployment
+
+- `vercel.json` is already configured to:
+  - install from `frontend`
+  - build from `frontend`
+  - publish `frontend/dist`
+  - handle SPA routing fallback
+
+After importing the repo in Vercel, only add the two `VITE_...` env vars and deploy.
