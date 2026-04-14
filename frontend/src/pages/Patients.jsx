@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { logAudit } from '../utils.js';
+import { getSensitivityLevel } from '../accessControl.js';
 
 const Patients = () => {
   const navigate = useNavigate();
@@ -523,7 +524,9 @@ const Patients = () => {
                     <tr key={pat.id}>
                       <td>
                         <div>{pat.name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)' }}></div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                          {getSensitivityLevel(pat) ? `Sensitivity: ${getSensitivityLevel(pat)}` : ''}
+                        </div>
                       </td>
                       <td>
                         <div>{pat.id}</div>

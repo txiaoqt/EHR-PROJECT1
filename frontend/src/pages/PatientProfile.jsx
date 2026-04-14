@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { useAuth } from '../AuthContext.jsx';
+import { canDeleteRecord, canViewSensitiveField, getSensitivityLevel } from '../accessControl.js';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -166,6 +167,12 @@ const PatientProfile = () => {
   };
 
   const handleDeletePatient = async () => {
+    if (!canDeleteRecord(user)) {
+      showToast('Only physicians can delete patient records.', 'error');
+      setShowDeleteModal(false);
+      return;
+    }
+
     setDeleting(true);
     try {
       const { error } = await supabase.from('patients').delete().eq('id', id);
@@ -336,7 +343,7 @@ const PatientProfile = () => {
                       <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', margin: '6px 0' }} />
 
                       {/* Only show delete button for physicians (doctors only) */}
-                      {user?.role === 'physician' && (
+                      {canDeleteRecord(user) && (
                         <button
                           className="btn"
                           style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', background: 'transparent', border: 'none', textAlign: 'left', color: 'var(--danger)' }}
@@ -377,7 +384,14 @@ const PatientProfile = () => {
                       {new Date(enc.encounter_date).toLocaleDateString()}
                     </div>
                     <div style={{ fontWeight: 600 }}>{enc.chief_complaint || 'No complaint recorded'}</div>
-                    <div style={{ color: 'var(--muted)', fontSize: 13 }}>{enc.assessment_plan || ''}</div>
+                    <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+                      {canViewSensitiveField(user, 'assessment_plan', enc) ? (enc.assessment_plan || '') : '[Restricted for nurse access]'}
+                    </div>
+                    {getSensitivityLevel(enc) && (
+                      <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+                        Sensitivity: {getSensitivityLevel(enc)}
+                      </div>
+                    )}
                   </div>
                 )) : <div style={{ color: 'var(--muted)' }}>No encounters found — create a new encounter.</div>}
               </div>
@@ -637,7 +651,9 @@ const PatientProfile = () => {
               <tr key={i}>
                 <td style={{ padding: '8px 6px' }}>{new Date(enc.encounter_date).toLocaleDateString()}</td>
                 <td style={{ padding: '8px 6px', whiteSpace: 'pre-wrap' }}>{enc.chief_complaint || 'N/A'}</td>
-                <td style={{ padding: '8px 6px', whiteSpace: 'pre-wrap' }}>{enc.assessment_plan || 'N/A'}</td>
+                <td style={{ padding: '8px 6px', whiteSpace: 'pre-wrap' }}>
+                  {canViewSensitiveField(user, 'assessment_plan', enc) ? (enc.assessment_plan || 'N/A') : '[Restricted for nurse access]'}
+                </td>
               </tr>
             ))}
           </tbody>

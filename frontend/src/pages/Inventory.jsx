@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient.js';
 import { logAudit } from '../utils.js';
+import { useAuth } from '../AuthContext.jsx';
+import { canDeleteRecord } from '../accessControl.js';
 
 const Inventory = () => {
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [search, setSearch] = useState('');
@@ -122,6 +125,7 @@ const Inventory = () => {
   );
 
   const reorderItems = items.filter(item => Number(item.stock_quantity) <= Number(item.reorder_level));
+  const actorName = (user?.name || user?.email || 'Unknown Staff').trim();
 
   const addStock = () => setShowAddModal(true);
 
@@ -211,7 +215,7 @@ const Inventory = () => {
         transaction_type: 'in',
         quantity: stockQty,
         reason: 'New item added',
-        performed_by: 'Dr. Rivera'
+        performed_by: actorName
       }]);
 
       // Log audit entry
@@ -315,7 +319,7 @@ const Inventory = () => {
         transaction_type: adjustData.type === 'add' ? 'in' : 'out',
         quantity: qty,
         reason: adjustData.reason.trim(),
-        performed_by: 'Dr. Rivera'
+        performed_by: actorName
       }]);
 
       // Log audit entry
@@ -355,6 +359,13 @@ const Inventory = () => {
   const submitDelete = async () => {
     setDeleteMessage('');
     setDeleteMessageType('');
+
+    if (!canDeleteRecord(user)) {
+      setDeleteMessage('Only physicians can delete inventory items.');
+      setDeleteMessageType('error');
+      return;
+    }
+
     if (!deleteItem) return;
 
     // verification: require exact item name typed
@@ -375,7 +386,7 @@ const Inventory = () => {
         transaction_type: 'out',
         quantity: deleteItem.stock_quantity || 0,
         reason: 'Item deleted from inventory',
-        performed_by: 'Dr. Rivera'
+        performed_by: actorName
       }]);
 
       // audit log
@@ -482,13 +493,15 @@ const Inventory = () => {
                           <button className="btn secondary" onClick={() => adjust(item)}>Adjust</button>
 
                           {/* Delete button */}
-                          <button
-                            className="btn"
-                            onClick={() => openDeleteModal(item)}
-                            title="Delete this item"
-                          >
-                            Delete
-                          </button>
+                          {canDeleteRecord(user) && (
+                            <button
+                              className="btn"
+                              onClick={() => openDeleteModal(item)}
+                              title="Delete this item"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))

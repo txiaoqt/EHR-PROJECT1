@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { logAudit } from '../utils.js';
 import { useAuth } from '../AuthContext.jsx';
+import { canDeleteRecord, isOwnerOrPrivileged } from '../accessControl.js';
 
 const Appointments = () => {
   const navigate = useNavigate();
@@ -180,6 +181,11 @@ const Appointments = () => {
   // update status: debug-friendly, ONLY update DB + local state (no redirect)
   const updateStatus = async (appt, newStatus) => {
     try {
+      if (!isOwnerOrPrivileged(user, appt?.clinician_name)) {
+        alert('You can only update your own appointments.');
+        return;
+      }
+
       if (!appt || !appt.id) {
         console.error('updateStatus: invalid appointment object or missing id', appt);
         alert('Unable to update status: appointment id missing.');
@@ -235,6 +241,12 @@ const Appointments = () => {
   };
 
   const submitDeleteAppointment = async () => {
+    if (!canDeleteRecord(user)) {
+      setDeleteMessage('Only physicians can delete appointments.');
+      setDeleteMessageType('error');
+      return;
+    }
+
     if (!deleteItem || !deleteItem.id) {
       setDeleteMessage('Invalid appointment selected.');
       setDeleteMessageType('error');
@@ -309,16 +321,18 @@ const Appointments = () => {
           <button className="btn small" onClick={() => setViewDate(new Date(year, month + 1, 1))}>→</button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6, flex: 1 }}>
-          {['S','M','T','W','T','F','S'].map(w => <div key={w} style={{ fontSize: 11, textAlign: 'center', color:'var(--muted)' }}>{w}</div>)}
+          {['S','M','T','W','T','F','S'].map((w, i) => (
+            <div key={`weekday-${i}-${w}`} style={{ fontSize: 11, textAlign: 'center', color:'var(--muted)' }}>{w}</div>
+          ))}
           {days.map((day, idx) => {
-            if (!day) return <div key={idx}></div>;
+            if (!day) return <div key={`blank-${idx}`}></div>;
             const currentKey = dateKey(new Date(year, month, day));
             const isToday = currentKey === todayKey;
             const isSelected = currentKey === selectedDate;
             let styles = { padding: 6, borderRadius: 6, textAlign:'center', cursor:'pointer' };
             if (isSelected) styles = { ...styles, background: 'var(--accent)', color: '#fff', fontWeight:700 };
             else if (isToday) styles = { ...styles, border: '1px solid var(--accent)' };
-            return <div key={day} style={styles} onClick={() => { setSelectedDate(currentKey); setFilter(currentKey === todayKey ? 'today' : 'selected'); }}>{day}</div>;
+            return <div key={`day-${day}`} style={styles} onClick={() => { setSelectedDate(currentKey); setFilter(currentKey === todayKey ? 'today' : 'selected'); }}>{day}</div>;
           })}
         </div>
       </div>
@@ -492,7 +506,7 @@ const Appointments = () => {
                           <button className="btn" onClick={() => handleAction(appt)}> Open </button>
 
                           {/* Delete button - only available to physicians */}
-                          {user?.role === 'physician' && (
+                          {canDeleteRecord(user) && (
                             <button
                               className="btn secondary"
                               onClick={() => openDeleteModal(appt)}

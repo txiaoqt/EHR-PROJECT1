@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './components/sidebar/Sidebar.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Appointments from './pages/Appointments.jsx';
@@ -16,12 +16,29 @@ import MyProfile from './pages/MyProfile.jsx';
 import './styles/main.css';
 import { exportCsv } from './utils.js';
 import { useAuth } from './AuthContext.jsx';
+import { getClinicHoursMessage, hasRequiredRole, isWithinClinicHours } from './accessControl.js';
 
-// Placeholder components for other pages
-const PlaceholderPage = ({ title }) => <main className="main"><div className="card">{title} Page</div></main>;
+const ProtectedRoute = ({ isAuthenticated, user, allowedRoles = [], children }) => {
+  const location = useLocation();
 
-function App() {
-  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (!isWithinClinicHours()) {
+    return <Navigate to="/login" replace state={{ sessionMessage: getClinicHoursMessage() }} />;
+  }
+
+  if (!hasRequiredRole(user, allowedRoles)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
+function AppShell() {
+  const { isAuthenticated, user, logout } = useAuth();
+  const navigate = useNavigate();
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('ehr_theme');
     if (saved) return saved;
@@ -31,6 +48,11 @@ function App() {
     const saved = localStorage.getItem('sidebarOpen');
     return saved !== null ? JSON.parse(saved) : true;
   });
+  const autoLogoutInProgressRef = useRef(false);
+
+  useEffect(() => {
+    document.title = 'TUP Clinic EHR';
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -47,31 +69,82 @@ function App() {
     window.exportCsv = exportCsv;
   }, []);
 
+  useEffect(() => {
+    if (!isAuthenticated) {
+      autoLogoutInProgressRef.current = false;
+      return;
+    }
+
+    let mounted = true;
+
+    const enforceClinicHours = async () => {
+      if (!isWithinClinicHours() && !autoLogoutInProgressRef.current) {
+        autoLogoutInProgressRef.current = true;
+        try {
+          await logout();
+        } catch (e) {
+          console.error('Auto-logout failed');
+        } finally {
+          if (mounted) {
+            navigate('/login', {
+              replace: true,
+              state: { sessionMessage: getClinicHoursMessage() },
+            });
+          }
+          autoLogoutInProgressRef.current = false;
+        }
+      }
+    };
+
+    enforceClinicHours();
+    const intervalId = setInterval(enforceClinicHours, 30000);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, [isAuthenticated, logout, navigate]);
+
+  const guard = (element, allowedRoles = []) => (
+    <ProtectedRoute isAuthenticated={isAuthenticated} user={user} allowedRoles={allowedRoles}>
+      {element}
+    </ProtectedRoute>
+  );
+
+  const canAccessAuthenticatedHome = isAuthenticated && isWithinClinicHours();
+
   return (
-    <Router>
     <div id="app-root">
-        {isAuthenticated && (
+        {canAccessAuthenticatedHome && (
           <div id="sidebar-container" className={`sidebar-container ${sidebarOpen ? '' : 'collapsed'}`}>
             <Sidebar />
           </div>
         )}
         <Routes>
-          <Route path="/" element={isAuthenticated ? <Dashboard setSidebarOpen={setSidebarOpen} sidebarOpen={sidebarOpen} /> : <Navigate to="/login" />} />
-          <Route path="/dashboard" element={isAuthenticated ? <Dashboard setSidebarOpen={setSidebarOpen} sidebarOpen={sidebarOpen} /> : <Navigate to="/login" />} />
-          <Route path="/appointments" element={isAuthenticated ? <Appointments /> : <Navigate to="/login" />} />
-          <Route path="/patients" element={isAuthenticated ? <Patients /> : <Navigate to="/login" />} />
-          <Route path="/encounter" element={isAuthenticated ? <Encounter /> : <Navigate to="/login" />} />
-          <Route path="/encounters" element={isAuthenticated ? <Encounters /> : <Navigate to="/login" />} />
-          <Route path="/reports" element={isAuthenticated ? <Reports /> : <Navigate to="/login" />} />
-          <Route path="/inventory" element={isAuthenticated ? <Inventory /> : <Navigate to="/login" />} />
+          <Route path="/" element={canAccessAuthenticatedHome ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
+          <Route path="/dashboard" element={guard(<Dashboard setSidebarOpen={setSidebarOpen} sidebarOpen={sidebarOpen} />)} />
+          <Route path="/appointments" element={guard(<Appointments />)} />
+          <Route path="/patients" element={guard(<Patients />)} />
+          <Route path="/encounter" element={guard(<Encounter />)} />
+          <Route path="/encounters" element={guard(<Encounters />)} />
+          <Route path="/reports" element={guard(<Reports />)} />
+          <Route path="/inventory" element={guard(<Inventory />)} />
 
-          <Route path="/help" element={isAuthenticated ? <Help /> : <Navigate to="/login" />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/settings" element={isAuthenticated ? <Settings /> : <Navigate to="/login" />} />
-          <Route path="/my-profile" element={isAuthenticated ? <MyProfile /> : <Navigate to="/login" />} />
-          <Route path="/patient-profile" element={isAuthenticated ? <PatientProfile /> : <Navigate to="/login" />} />
+          <Route path="/help" element={guard(<Help />)} />
+          <Route path="/login" element={canAccessAuthenticatedHome ? <Navigate to="/dashboard" replace /> : <Login />} />
+          <Route path="/settings" element={guard(<Settings />)} />
+          <Route path="/my-profile" element={guard(<MyProfile />)} />
+          <Route path="/patient-profile" element={guard(<PatientProfile />)} />
+          <Route path="*" element={<Navigate to={canAccessAuthenticatedHome ? '/dashboard' : '/login'} replace />} />
         </Routes>
       </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppShell />
     </Router>
   );
 }

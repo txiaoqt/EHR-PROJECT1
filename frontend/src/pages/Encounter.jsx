@@ -1,9 +1,10 @@
 // src/pages/Encounter.jsx
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { logAudit } from '../utils.js';
 import { useAuth } from '../AuthContext.jsx';
+import { canEditField, sanitizeEncounterPayloadForRole } from '../accessControl.js';
 
 // simple student search (keeps your original query behaviour)
 // NOTE: we sanitize the query to remove % and _ before using ilike patterns.
@@ -36,7 +37,9 @@ const formatClinicianName = (userData) => {
 const Encounter = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const clinicianDefault = user ? formatClinicianName(user) : '';
+  const canEditAssessmentPlan = canEditField(user, 'assessment_plan');
 
   const [form, setForm] = useState({
     patient: '',                 // patient id (TUP id) — required
@@ -59,6 +62,40 @@ const Encounter = () => {
   const searchTimer = useRef(null);
 
   const [isSaving, setIsSaving] = useState(false);
+
+  // Prefill patient when navigating from Appointments/Patients with state.
+  useEffect(() => {
+    let mounted = true;
+
+    const prefillFromNavigation = async () => {
+      const incomingId = location?.state?.patientId;
+      const incomingName = location?.state?.patientName;
+      if (!incomingId) return;
+
+      let displayName = incomingName || '';
+      if (!displayName) {
+        try {
+          const { data } = await supabase
+            .from('students')
+            .select('id, name')
+            .eq('id', incomingId)
+            .maybeSingle();
+          if (data?.name) displayName = data.name;
+        } catch (e) {
+          // ignore; fallback below
+        }
+      }
+
+      if (!mounted) return;
+      const visible = displayName ? `${displayName} (${incomingId})` : `${incomingId}`;
+      setForm(prev => ({ ...prev, patient: incomingId, patientNameVisible: visible }));
+      setPatientSearch(visible);
+      setPatientSuggestions([]);
+    };
+
+    prefillFromNavigation();
+    return () => { mounted = false; };
+  }, [location]);
 
   // ---------- Vitals validation constraints & helpers (ADDED) ----------
   const VITAL_LIMITS = {
@@ -264,7 +301,9 @@ const Encounter = () => {
         chief_complaint: form.complaint,
         hpi: form.hpi,
         physical_exam: form.exam,
-        assessment_plan: form.plan,
+        ...sanitizeEncounterPayloadForRole(user, {
+          assessment_plan: form.plan,
+        }),
         vitals: vitalsJson,
         attachments: [] // attachments removed per request
       }]);
@@ -439,6 +478,7 @@ const Encounter = () => {
                   onChange={e => setField('plan', e.target.value)}
                   rows="4"
                   style={{ width: '100%', marginTop: 16, padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', fontFamily: 'inherit' }}
+                  disabled={!canEditAssessmentPlan}
                   placeholder={
 `Guide:
 - Assessment: likely diagnoses (differentials if needed)
@@ -447,6 +487,11 @@ const Encounter = () => {
                 <div style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)' }}>
                   State your impression and the concrete next steps (tests, prescriptions, referrals, safety-netting).
                 </div>
+                {!canEditAssessmentPlan && (
+                  <div style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)' }}>
+                    Physician-only field: nurses cannot edit Assessment / Plan.
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

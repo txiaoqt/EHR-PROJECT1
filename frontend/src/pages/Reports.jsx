@@ -40,10 +40,18 @@ const Reports = () => {
   const [reportData, setReportData] = useState([]);
   const [chartData, setChartData] = useState(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showExportPasswordModal, setShowExportPasswordModal] = useState(false);
+  const [exportPasswordInput, setExportPasswordInput] = useState('');
+  const [exportPasswordError, setExportPasswordError] = useState('');
+  const [pendingExportAction, setPendingExportAction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [dateError, setDateError] = useState('');
   const mountedRef = useRef(false);
+  const REPORT_EXPORT_PASSWORD =
+    import.meta.env.VITE_REPORT_EXPORT_PASSWORD ||
+    import.meta.env.VITE_EXPORT_CENSUS_PASSWORD ||
+    'TUPCensus@2026';
 
   useEffect(() => {
     const today = new Date();
@@ -501,6 +509,37 @@ const Reports = () => {
     }
   };
 
+  const requestReportExport = (action) => {
+    if (!reportData || reportData.length === 0 || exporting) return;
+    setPendingExportAction(action);
+    setExportPasswordInput('');
+    setExportPasswordError('');
+    setShowExportMenu(false);
+    setShowExportPasswordModal(true);
+  };
+
+  const confirmReportExport = async () => {
+    const trimmed = (exportPasswordInput || '').trim();
+    if (!trimmed) {
+      setExportPasswordError('Please enter the export password.');
+      return;
+    }
+    if (trimmed !== REPORT_EXPORT_PASSWORD) {
+      setExportPasswordError('Incorrect export password.');
+      return;
+    }
+
+    const action = pendingExportAction;
+    setShowExportPasswordModal(false);
+    setExportPasswordInput('');
+    setExportPasswordError('');
+    setPendingExportAction(null);
+
+    if (action === 'csv-full') exportCsv('full');
+    if (action === 'pdf-selected') await exportPdf('selected');
+    if (action === 'pdf-full') await exportPdf('full');
+  };
+
   return (
     <main className="main">
       <section className="page">
@@ -530,9 +569,9 @@ const Reports = () => {
                       border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
                       borderRadius: 6, zIndex: 2000, overflow: 'hidden', minWidth: 220
                     }}>
-                      <button onClick={() => exportCsv('full')} style={menuBtnStyle} disabled={!reportData || reportData.length === 0}>CSV (Full)</button>
-                      <button onClick={() => exportPdf('selected')} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Selected)</button>
-                      <button onClick={() => exportPdf('full')} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Full)</button>
+                      <button onClick={() => requestReportExport('csv-full')} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>CSV (Full)</button>
+                      <button onClick={() => requestReportExport('pdf-selected')} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Selected)</button>
+                      <button onClick={() => requestReportExport('pdf-full')} style={menuBtnStyle} disabled={!reportData || reportData.length === 0 || exporting}>PDF (Full)</button>
                     </div>
                   )}
                 </div>
@@ -616,7 +655,33 @@ const Reports = () => {
         </div>
       </section>
 
-      {/* Note: password confirmation removed — exports run immediately when physician clicks Export */}
+      {showExportPasswordModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2100 }}>
+          <div style={{ background:'white', padding:20, borderRadius:8, maxWidth:420, width:'92%' }}>
+            <h3 style={{ marginTop: 0 }}>Reports Export Password</h3>
+            <p style={{ color: 'var(--muted)' }}>Enter password to export this report.</p>
+            <input
+              type="password"
+              className="input"
+              value={exportPasswordInput}
+              onChange={(e) => {
+                setExportPasswordInput(e.target.value);
+                if (exportPasswordError) setExportPasswordError('');
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmReportExport(); }}
+              placeholder="Enter export password"
+              autoFocus
+            />
+            {exportPasswordError && (
+              <div style={{ color: '#b42318', marginTop: 8, fontSize: 13 }}>{exportPasswordError}</div>
+            )}
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop: 14 }}>
+              <button className="btn secondary" onClick={() => setShowExportPasswordModal(false)}>Cancel</button>
+              <button className="btn" onClick={confirmReportExport}>Confirm Export</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

@@ -1,85 +1,84 @@
 // src/pages/Login.jsx
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { useAuth } from '../AuthContext.jsx';
+import {
+  getClinicHoursMessage,
+  getLockoutMessage,
+  isWithinClinicHours,
+  LOCKOUT_MINUTES,
+  MAX_FAILED_ATTEMPTS,
+} from './loginSecurity.js';
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Load and render reCAPTCHA v2 checkbox widget
-  React.useEffect(() => {
-    const tryRender = () => {
-      const el = document.querySelector('.g-recaptcha');
-      if (window.grecaptcha && el && typeof window.grecaptcha.render === 'function') {
-        try {
-          // If widget already rendered, render will return widget id; re-rendering same element is safe
-          window.grecaptcha.render(el, {
-            sitekey: import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY,
-          });
-        } catch (e) {
-          // ignore rendering errors silently
-          console.warn('reCAPTCHA render issue', e);
-        }
-        return true;
-      }
-      return false;
-    };
-
-    const interval = setInterval(() => {
-      if (tryRender()) clearInterval(interval);
-    }, 300);
-
-    // try once on mount synchronously too
-    tryRender();
-
-    return () => clearInterval(interval);
-  }, []);
-
   const handleLogin = async () => {
     if (!email || !pass) {
       setMsg('Please enter email and password');
       return;
     }
+
+    if (!isWithinClinicHours()) {
+      setMsg(getClinicHoursMessage());
+      return;
+    }
+
     setLoading(true);
     setMsg('');
 
     try {
-      // Verify reCAPTCHA v2 response
-      const captchaToken = typeof window.grecaptcha !== 'undefined' ? window.grecaptcha.getResponse() : '';
-      if (!captchaToken) {
-        setMsg('Please complete the CAPTCHA');
-        setLoading(false);
-        return;
-      }
-
+      const normalizedEmail = email.trim().toLowerCase();
+      const now = new Date();
       const { data: users, error } = await supabase
         .from('users')
-        .select('id, name, email, password, avatar, role')
-        .eq('email', email)
+        .select('id, name, email, password, avatar, role, failed_login_attempts, locked_until, last_failed_login_at')
+        .ilike('email', normalizedEmail)
         .eq('active', true);
 
       if (error) {
         console.error(error);
         setMsg('Login failed');
-        setLoading(false);
         return;
       }
 
       if (!users || users.length === 0) {
         setMsg('Invalid email or password');
-        setLoading(false);
         return;
       }
 
       const user = users[0];
+      const lockedUntil = user.locked_until ? new Date(user.locked_until) : null;
+      const isLocked = lockedUntil && !Number.isNaN(lockedUntil.getTime()) && lockedUntil.getTime() > now.getTime();
+
+      if (isLocked) {
+        setMsg(getLockoutMessage(user.locked_until, now));
+        return;
+      }
 
       if (pass === user.password) {
+        const { error: resetError } = await supabase
+          .from('users')
+          .update({
+            failed_login_attempts: 0,
+            locked_until: null,
+            last_failed_login_at: null,
+          })
+          .eq('id', user.id);
+
+        if (resetError) {
+          console.error(resetError);
+          setMsg('Login failed');
+          return;
+        }
+
         login({
           id: user.id,
           name: user.name,
@@ -89,19 +88,55 @@ const Login = () => {
         });
         navigate('/dashboard');
       } else {
+        const currentFailedAttempts = Number(user.failed_login_attempts || 0);
+        const lastFailedAt = user.last_failed_login_at ? new Date(user.last_failed_login_at) : null;
+        const isLastFailedStale =
+          !lastFailedAt ||
+          Number.isNaN(lastFailedAt.getTime()) ||
+          now.getTime() - lastFailedAt.getTime() > LOCKOUT_MINUTES * 60 * 1000;
+        const baselineAttempts = isLastFailedStale ? 0 : currentFailedAttempts;
+        const nextFailedAttempts = baselineAttempts + 1;
+        const shouldLock = nextFailedAttempts >= MAX_FAILED_ATTEMPTS;
+        const lockUntilIso = shouldLock ? new Date(now.getTime() + LOCKOUT_MINUTES * 60 * 1000).toISOString() : null;
+
+        const { error: failedUpdateError } = await supabase
+          .from('users')
+          .update({
+            failed_login_attempts: nextFailedAttempts,
+            last_failed_login_at: now.toISOString(),
+            locked_until: lockUntilIso,
+          })
+          .eq('id', user.id);
+
+        if (failedUpdateError) {
+          console.error(failedUpdateError);
+          setMsg('Login failed');
+          return;
+        }
+
+        if (shouldLock) {
+          setMsg(getLockoutMessage(lockUntilIso, now));
+          return;
+        }
+
         setMsg('Invalid email or password');
       }
     } catch (e) {
       console.error(e);
       setMsg('Login failed');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const onKeyDown = (e) => {
     if (e.key === 'Enter') handleLogin();
   };
+
+  React.useEffect(() => {
+    const sessionMessage = location?.state?.sessionMessage;
+    if (sessionMessage) setMsg(sessionMessage);
+  }, [location]);
 
   return (
     <main
@@ -277,14 +312,6 @@ const Login = () => {
                     outline: 'none',
                     boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.04)',
                   }}
-                />
-              </div>
-
-              {/* reCAPTCHA v2 checkbox widget */}
-              <div style={{ margin: '12px 0' }}>
-                <div
-                  className="g-recaptcha"
-                  data-sitekey={import.meta.env.VITE_RECAPTCHA_V2_SITE_KEY}
                 />
               </div>
 

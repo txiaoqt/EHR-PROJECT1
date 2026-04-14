@@ -65,6 +65,10 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
 
   // export modal
   const [showExportSuccessModal, setShowExportSuccessModal] = useState(false);
+  const [showExportPasswordModal, setShowExportPasswordModal] = useState(false);
+  const [exportPasswordInput, setExportPasswordInput] = useState('');
+  const [exportPasswordError, setExportPasswordError] = useState('');
+  const EXPORT_CENSUS_PASSWORD = import.meta.env.VITE_EXPORT_CENSUS_PASSWORD || 'TUPCensus@2026';
 
   // ---- New appointment modal state (Dashboard) ----
   const [showNewApptModal, setShowNewApptModal] = useState(false);
@@ -194,12 +198,22 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
       const toIso = nowD.toISOString().slice(0,10);
 
       // query chief_complaint within the 30-day window
-      const { data: diagnoses } = await supabase
+      const { data: diagnoses30 } = await supabase
         .from('encounters')
         .select('chief_complaint')
         .gte('encounter_date', fromIso)
         .lte('encounter_date', toIso + 'T23:59:59')
         .not('chief_complaint', 'is', null);
+
+      // fallback for seeded/demo datasets that may be outside the last 30 days
+      let diagnoses = diagnoses30 || [];
+      if (!diagnoses.length) {
+        const { data: diagnosesAll } = await supabase
+          .from('encounters')
+          .select('chief_complaint')
+          .not('chief_complaint', 'is', null);
+        diagnoses = diagnosesAll || [];
+      }
 
       const diagCounts = {};
       if (diagnoses && Array.isArray(diagnoses)) {
@@ -519,9 +533,29 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
   };
   const closeAlertsModal = () => setShowAlertsModal(false);
 
-  // Password confirm for export — now simplified to export immediately
-  const requestExportCensus = async () => {
+  const confirmExportCensus = async () => {
+    const trimmed = (exportPasswordInput || '').trim();
+    if (!trimmed) {
+      setExportPasswordError('Please enter the export password.');
+      return;
+    }
+
+    if (trimmed !== EXPORT_CENSUS_PASSWORD) {
+      setExportPasswordError('Incorrect export password.');
+      return;
+    }
+
+    setExportPasswordError('');
+    setShowExportPasswordModal(false);
+    setExportPasswordInput('');
     await exportCensus();
+  };
+
+  const requestExportCensus = async () => {
+    if (user?.role !== 'physician') return;
+    setExportPasswordInput('');
+    setExportPasswordError('');
+    setShowExportPasswordModal(true);
   };
 
   // When clicking a low stock item in the modal or card, navigate to inventory and pass focus
@@ -843,6 +877,35 @@ const Dashboard = ({ setSidebarOpen, sidebarOpen }) => {
               >
                 Go to Inventory
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export success */}
+      {showExportPasswordModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
+          <div style={{ background:'white', padding:20, borderRadius:8, maxWidth:420, width:'92%' }}>
+            <h3 style={{ marginTop: 0 }}>Export Census Password</h3>
+            <p style={{ color: 'var(--muted)' }}>Enter password to export census data.</p>
+            <input
+              type="password"
+              className="input"
+              value={exportPasswordInput}
+              onChange={(e) => {
+                setExportPasswordInput(e.target.value);
+                if (exportPasswordError) setExportPasswordError('');
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmExportCensus(); }}
+              placeholder="Enter export password"
+              autoFocus
+            />
+            {exportPasswordError && (
+              <div style={{ color: '#b42318', marginTop: 8, fontSize: 13 }}>{exportPasswordError}</div>
+            )}
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop: 14 }}>
+              <button className="btn secondary" onClick={() => setShowExportPasswordModal(false)}>Cancel</button>
+              <button className="btn" onClick={confirmExportCensus}>Confirm Export</button>
             </div>
           </div>
         </div>

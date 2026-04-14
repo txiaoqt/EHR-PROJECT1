@@ -3,6 +3,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { useAuth } from '../AuthContext.jsx';
+import { canDeleteRecord, canViewSensitiveField, getSensitivityLevel, isHighSensitivity, isOwnerOrPrivileged } from '../accessControl.js';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import tupehrlogo from '../assets/images/tupehrlogo.jpg';
@@ -193,6 +194,11 @@ const Encounters = () => {
   // Mark complete action — try DB, fallback to local-only
   const markComplete = async (encId) => {
     if (!encId) return;
+    const target = (encounters || []).find(e => e.id === encId);
+    if (!isOwnerOrPrivileged(user, target?.clinician_name)) {
+      showToast('You can only update your own encounters.', 'error');
+      return;
+    }
     setLoadingId(encId, true);
 
     try {
@@ -245,6 +251,12 @@ const Encounters = () => {
   };
 
   const submitDeleteEncounter = async () => {
+    if (!canDeleteRecord(user)) {
+      setDeleteMessage('Only physicians can delete encounters.');
+      setDeleteMessageType('error');
+      return;
+    }
+
     if (!deleteItem || !deleteItem.id) {
       setDeleteMessage('Invalid encounter.');
       setDeleteMessageType('error');
@@ -319,7 +331,9 @@ const Encounters = () => {
         const safeId = (r.patient_id || '').toString().replace(/</g,'&lt;');
         const safeClin = (r.clinician_name || '').replace(/</g,'&lt;');
         const safeComplaint = (r.chief_complaint || '').replace(/</g,'&lt;');
-        const safePlan = (r.assessment_plan || '').replace(/</g,'&lt;');
+        const safePlan = canViewSensitiveField(user, 'assessment_plan', r)
+          ? (r.assessment_plan || '').replace(/</g,'&lt;')
+          : '[Restricted for nurse access]';
 
         tr.innerHTML = `
           <td style="padding:8px; font-weight:600; vertical-align: top;">${safeName}</td>
@@ -451,7 +465,14 @@ const Encounters = () => {
                             <td style={{ padding: 10 }}>{enc.patient_id}</td>
                             <td style={{ padding: 10 }} title={localizedDateTime(enc.encounter_date)}>{localizedDateTime(enc.encounter_date)}</td>
                             <td style={{ padding: 10 }}>{enc.clinician_name || '—'}</td>
-                            <td style={{ padding: 10, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{enc.chief_complaint || 'N/A'}</td>
+                            <td style={{ padding: 10, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {enc.chief_complaint || 'N/A'}
+                              {isHighSensitivity(enc) && (
+                                <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--muted)' }}>
+                                  (High sensitivity)
+                                </span>
+                              )}
+                            </td>
                             <td style={{ padding: 10, display: 'flex', gap: 8 }}>
                               <button className="btn secondary" onClick={() => markComplete(enc.id)} disabled={loadingIds.includes(enc.id)}>
                                 {loadingIds.includes(enc.id) ? 'Working…' : 'Mark Complete'}
@@ -499,12 +520,19 @@ const Encounters = () => {
                             <td style={{ padding: 10 }}>{enc.patient_id}</td>
                             <td style={{ padding: 10 }} title={localizedDateTime(enc.encounter_date)}>{localizedDateTime(enc.encounter_date)}</td>
                             <td style={{ padding: 10 }}>{enc.clinician_name || '—'}</td>
-                            <td style={{ padding: 10, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{enc.chief_complaint || 'N/A'}</td>
+                            <td style={{ padding: 10, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {enc.chief_complaint || 'N/A'}
+                              {getSensitivityLevel(enc) && (
+                                <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--muted)' }}>
+                                  ({getSensitivityLevel(enc)})
+                                </span>
+                              )}
+                            </td>
                             <td style={{ padding: 10, display: 'flex', gap: 8 }}>
                               <button className="btn" onClick={() => navigate(`/patient-profile?id=${enc.patient_id}`)}>Profile</button>
 
                               {/* DELETE BUTTON - only available to physicians */}
-                              {user?.role === 'physician' && (
+                              {canDeleteRecord(user) && (
                                 <button
                                   className="btn secondary"
                                   onClick={() => openDeleteModal(enc)}
