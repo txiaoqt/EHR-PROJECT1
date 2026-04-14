@@ -375,7 +375,29 @@ const Inventory = () => {
       return;
     }
 
+    if (!deletePassword) {
+      setDeleteMessage('Password is required.');
+      setDeleteMessageType('error');
+      return;
+    }
+
+    setDeleting(true);
     try {
+      // Verify password
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('password')
+        .eq('id', user?.id)
+        .single();
+
+      if (userError || !userData) throw new Error('Could not verify identity.');
+      if (userData.password !== deletePassword) {
+        setDeleteMessage('Incorrect password.');
+        setDeleteMessageType('error');
+        setDeleting(false);
+        return;
+      }
+
       // delete item
       const { error: delErr } = await supabase.from('inventory').delete().eq('id', deleteItem.id);
       if (delErr) throw delErr;
@@ -402,6 +424,7 @@ const Inventory = () => {
         setShowDeleteModal(false);
         setDeleteItem(null);
         setDeleteConfirmName('');
+        setDeletePassword('');
         setDeleteMessage('');
         setDeleteMessageType('');
       }, 900);
@@ -409,6 +432,8 @@ const Inventory = () => {
       console.error('Error deleting item:', err);
       setDeleteMessage('Error deleting item: ' + (err.message || 'Unknown error'));
       setDeleteMessageType('error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -793,6 +818,17 @@ const Inventory = () => {
                 placeholder="Type exact item name to confirm"
                 value={deleteConfirmName}
                 onChange={(e) => setDeleteConfirmName(sanitizeName(e.target.value))}
+              />
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', marginBottom: 4 }}>Enter your password to verify:</label>
+              <input
+                type="password"
+                className="input"
+                style={{ width: '100%' }}
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
               />
             </div>
 

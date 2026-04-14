@@ -3,10 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { logAudit } from '../utils.js';
-import { getSensitivityLevel } from '../accessControl.js';
+import { getSensitivityLevel, isPhysician } from '../accessControl.js';
+import { useAuth } from '../AuthContext.jsx';
 
 const Patients = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // data
   const [patients, setPatients] = useState([]);
@@ -524,9 +526,11 @@ const Patients = () => {
                     <tr key={pat.id}>
                       <td>
                         <div>{pat.name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                          {getSensitivityLevel(pat) ? `Sensitivity: ${getSensitivityLevel(pat)}` : ''}
-                        </div>
+                        {isPhysician(user) && getSensitivityLevel(pat) && getSensitivityLevel(pat) !== 'normal' && (
+                          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                            Sensitivity: {getSensitivityLevel(pat)}
+                          </div>
+                        )}
                       </td>
                       <td>
                         <div>{pat.id}</div>

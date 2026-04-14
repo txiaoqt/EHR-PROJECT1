@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { translate } from '../../utils';
 import { useAuth } from '../../AuthContext.jsx';
 import { supabase } from '../../supabaseClient.js';
+import { isPhysician } from '../../accessControl.js';
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -205,17 +206,19 @@ const Sidebar = () => {
         <div className="sidebar-footer">
           <div>Logged in as <strong>Dr. Rivera</strong></div>
 
-          <div
-            className="muted"
-            style={{ cursor: 'pointer' }}
-            onClick={openBackupSettings}
-            title="Open backup settings"
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openBackupSettings(); }}
-          >
-            Last backup: <strong>{lastBackup}</strong>
-          </div>
+          {isPhysician(user) && (
+            <div
+              className="muted"
+              style={{ cursor: 'pointer' }}
+              onClick={openBackupSettings}
+              title="Open backup settings"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') openBackupSettings(); }}
+            >
+              Last backup: <strong>{lastBackup}</strong>
+            </div>
+          )}
 
           <div className="footer-actions">
             <button id="sidebarSettings" className="btn small" onClick={() => navigate('/settings')}>Settings</button>

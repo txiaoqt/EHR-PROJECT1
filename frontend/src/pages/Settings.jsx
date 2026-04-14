@@ -9,6 +9,7 @@ import {
   formatTime
 } from '../utils.js';                                        // utilities
 import { useAuth } from '../AuthContext.jsx';                // auth context
+import { isPhysician } from '../accessControl.js';          // access control
 
 const Settings = () => {
   const location = useLocation();
@@ -24,6 +25,8 @@ const Settings = () => {
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showBackupPasswordModal, setShowBackupPasswordModal] = useState(false);
+  const [backupPasswordInput, setBackupPasswordInput] = useState('');
 
   const backupCardRef = useRef(null);
 
@@ -116,7 +119,48 @@ const Settings = () => {
     }
   };
 
+  const handleBackupSubmit = async (e) => {
+    e.preventDefault();
+    if (!backupPasswordInput) return;
+
+    try {
+      // For this specific setup, we check the 'users' table for the current user's password
+      // In a real Supabase Auth setup, you'd use signInWithPassword, but this project
+      // uses a custom 'users' table with plain passwords for this demo.
+      const { data, error } = await supabase
+        .from('users')
+        .select('password')
+        .eq('id', authUser?.id)
+        .single();
+
+      if (error || !data) throw new Error('Could not verify identity.');
+
+      if (data.password !== backupPasswordInput) {
+        setMessage('Incorrect password.');
+        setMessageType('error');
+        setTimeout(() => setMessage(''), 3000);
+        return;
+      }
+
+      // Success
+      setShowBackupPasswordModal(false);
+      setBackupPasswordInput('');
+      backupAll();
+    } catch (err) {
+      console.error(err);
+      setMessage('Verification failed.');
+      setMessageType('error');
+      setTimeout(() => setMessage(''), 3000);
+    }
+  };
+
   const backupAll = async () => {
+    if (!isPhysician(authUser)) {
+      setMessage('Access denied.');
+      setMessageType('error');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
     setBackingUp(true);
     setMessage('Preparing backup...');
     setMessageType('info');
@@ -206,6 +250,49 @@ const Settings = () => {
 
   return (
     <main className="main">
+      {/* Backup Password Modal */}
+      {showBackupPasswordModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 3000
+        }}>
+          <form onSubmit={handleBackupSubmit} className="card" style={{ width: 400, padding: 20 }}>
+            <h3 style={{ marginTop: 0 }}>Verify Identity</h3>
+            <p style={{ color: 'var(--muted)', fontSize: 14 }}>
+              Enter your password to proceed with the full data backup.
+            </p>
+            <input
+              type="password"
+              className="input"
+              autoFocus
+              placeholder="Your password"
+              value={backupPasswordInput}
+              onChange={e => setBackupPasswordInput(e.target.value)}
+              style={{ width: '100%', marginBottom: 15 }}
+            />
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => {
+                  setShowBackupPasswordModal(false);
+                  setBackupPasswordInput('');
+                }}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn">
+                Confirm
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {message && (
         <div style={{
@@ -233,45 +320,47 @@ const Settings = () => {
           <h2>Settings</h2>
 
           {/* BACKUP CARD — TOP */}
-          <div
-            className="card"
-            ref={backupCardRef}
-            style={{ marginTop: 20 }}
-          >
-            <h3 style={{ marginTop: 0 }}>Backup & Export</h3>
-            <p style={{ color: 'var(--muted)' }}>
-              Create a full export of system tables for offline backup or migration.
-            </p>
+          {isPhysician(authUser) && (
+            <div
+              className="card"
+              ref={backupCardRef}
+              style={{ marginTop: 20 }}
+            >
+              <h3 style={{ marginTop: 0 }}>Backup & Export</h3>
+              <p style={{ color: 'var(--muted)' }}>
+                Create a full export of system tables for offline backup or migration.
+              </p>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div>
-                <div style={{ fontSize: 13, color: 'var(--muted)' }}>Last backup</div>
-                <div style={{ fontWeight: 600 }}>{lastBackup}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)' }}>Last backup</div>
+                  <div style={{ fontWeight: 600 }}>{lastBackup}</div>
+                </div>
+
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                  <button className="btn" disabled={backingUp} onClick={() => setShowBackupPasswordModal(true)}>
+                    {backingUp ? 'Backing up…' : 'Backup all data'}
+                  </button>
+                  <button
+                    className="btn secondary"
+                    onClick={() => {
+                      setMessage(lastBackup === 'Never'
+                        ? 'No backup found.'
+                        : `Last backup: ${lastBackup}`);
+                      setMessageType('info');
+                      setTimeout(() => setMessage(''), 3000);
+                    }}
+                  >
+                    Info
+                  </button>
+                </div>
               </div>
 
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
-                <button className="btn" disabled={backingUp} onClick={backupAll}>
-                  {backingUp ? 'Backing up…' : 'Backup all data'}
-                </button>
-                <button
-                  className="btn secondary"
-                  onClick={() => {
-                    setMessage(lastBackup === 'Never'
-                      ? 'No backup found.'
-                      : `Last backup: ${lastBackup}`);
-                    setMessageType('info');
-                    setTimeout(() => setMessage(''), 3000);
-                  }}
-                >
-                  Info
-                </button>
+              <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
+                Included: patients, encounters, appointments, inventory, users, settings, audit_logs.
               </div>
             </div>
-
-            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
-              Included: patients, encounters, appointments, inventory, users, settings, audit_logs.
-            </div>
-          </div>
+          )}
 
           {/* MAIN GRID */}
           <div style={{

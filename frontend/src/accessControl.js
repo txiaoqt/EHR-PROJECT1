@@ -13,7 +13,7 @@ const manilaFormatter = new Intl.DateTimeFormat('en-US', {
   second: '2-digit',
 });
 
-const PHYSICIAN_ONLY_FIELDS = new Set(['assessment_plan']);
+const PHYSICIAN_ONLY_FIELDS = new Set([]);
 const HIGH_SENSITIVITY_LEVELS = new Set(['high', 'restricted', 'critical', '4', '5']);
 
 export const normalizeRole = (role) => (role || '').toString().trim().toLowerCase();

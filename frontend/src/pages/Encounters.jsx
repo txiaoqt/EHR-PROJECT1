@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { useAuth } from '../AuthContext.jsx';
-import { canDeleteRecord, canViewSensitiveField, getSensitivityLevel, isHighSensitivity, isOwnerOrPrivileged } from '../accessControl.js';
+import { canDeleteRecord, canViewSensitiveField, getSensitivityLevel, isHighSensitivity, isOwnerOrPrivileged, isPhysician } from '../accessControl.js';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import tupehrlogo from '../assets/images/tupehrlogo.jpg';
@@ -66,6 +66,7 @@ const Encounters = () => {
   const [deleteMessage, setDeleteMessage] = useState('');
   const [deleteMessageType, setDeleteMessageType] = useState(''); // success | error
   const [deleting, setDeleting] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
 
   // Active queue will reference today's date in Asia/Manila
   const todayKey = toManilaDateKey(new Date());
@@ -270,8 +271,29 @@ const Encounters = () => {
       return;
     }
 
+    if (!deletePassword) {
+      setDeleteMessage('Password is required.');
+      setDeleteMessageType('error');
+      return;
+    }
+
     setDeleting(true);
     try {
+      // Verify password
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('password')
+        .eq('id', user?.id)
+        .single();
+
+      if (userError || !userData) throw new Error('Could not verify identity.');
+      if (userData.password !== deletePassword) {
+        setDeleteMessage('Incorrect password.');
+        setDeleteMessageType('error');
+        setDeleting(false);
+        return;
+      }
+
       const { error } = await supabase
         .from('encounters')
         .delete()
@@ -467,9 +489,9 @@ const Encounters = () => {
                             <td style={{ padding: 10 }}>{enc.clinician_name || '—'}</td>
                             <td style={{ padding: 10, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {enc.chief_complaint || 'N/A'}
-                              {isHighSensitivity(enc) && (
+                              {isPhysician(user) && getSensitivityLevel(enc) && getSensitivityLevel(enc) !== 'normal' && (
                                 <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--muted)' }}>
-                                  (High sensitivity)
+                                  ({getSensitivityLevel(enc)})
                                 </span>
                               )}
                             </td>
@@ -522,7 +544,7 @@ const Encounters = () => {
                             <td style={{ padding: 10 }}>{enc.clinician_name || '—'}</td>
                             <td style={{ padding: 10, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {enc.chief_complaint || 'N/A'}
-                              {getSensitivityLevel(enc) && (
+                              {isPhysician(user) && getSensitivityLevel(enc) && getSensitivityLevel(enc) !== 'normal' && (
                                 <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--muted)' }}>
                                   ({getSensitivityLevel(enc)})
                                 </span>
@@ -632,13 +654,24 @@ const Encounters = () => {
               This will permanently delete the encounter for <strong>{deleteItem.patient_id}</strong>.
             </p>
 
-            <div>
+            <div style={{ marginTop: 12 }}>
               <label>Type the Patient ID to confirm:</label>
               <input
                 className="input"
                 style={{ marginTop: 6 }}
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
+              />
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label>Enter your password to verify:</label>
+              <input
+                type="password"
+                className="input"
+                style={{ marginTop: 6 }}
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
               />
             </div>
 

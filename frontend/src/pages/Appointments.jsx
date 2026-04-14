@@ -38,6 +38,7 @@ const Appointments = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState('');
   const [deleteMessage, setDeleteMessage] = useState('');
   const [deleteMessageType, setDeleteMessageType] = useState(''); // 'success'|'error'
+  const [deletePassword, setDeletePassword] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   // fetch appointments
@@ -259,10 +260,31 @@ const Appointments = () => {
       return;
     }
 
+    if (!deletePassword) {
+      setDeleteMessage('Password is required.');
+      setDeleteMessageType('error');
+      return;
+    }
+
     setDeleting(true);
     setDeleteMessage('');
     setDeleteMessageType('');
     try {
+      // Verify password
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('password')
+        .eq('id', user?.id)
+        .single();
+
+      if (userError || !userData) throw new Error('Could not verify identity.');
+      if (userData.password !== deletePassword) {
+        setDeleteMessage('Incorrect password.');
+        setDeleteMessageType('error');
+        setDeleting(false);
+        return;
+      }
+
       const { error } = await supabase.from('appointments').delete().eq('id', deleteItem.id);
       if (error) throw error;
 
@@ -617,6 +639,16 @@ const Appointments = () => {
                   placeholder="e.g., TUPM-XX-XXXX"
                   value={deleteConfirmId}
                   onChange={(e) => setDeleteConfirmId(e.target.value)}
+                />
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', marginBottom: 6 }}>Enter your password to verify</label>
+                <input
+                  className="input"
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
                 />
               </div>
 

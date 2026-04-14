@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient.js';
 import { useAuth } from '../AuthContext.jsx';
-import { canDeleteRecord, canViewSensitiveField, getSensitivityLevel } from '../accessControl.js';
+import { canDeleteRecord, canViewSensitiveField, getSensitivityLevel, isPhysician } from '../accessControl.js';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -57,6 +57,8 @@ const PatientProfile = () => {
   const [showMore, setShowMore] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteMessage, setDeleteMessage] = useState('');
   const [previewSrc, setPreviewSrc] = useState(null);
   const [previewType, setPreviewType] = useState(null);
   const pdfExportRef = useRef(); // hidden export container
@@ -173,8 +175,27 @@ const PatientProfile = () => {
       return;
     }
 
+    if (!deletePassword) {
+      setDeleteMessage('Password is required.');
+      return;
+    }
+
     setDeleting(true);
     try {
+      // Verify password
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('password')
+        .eq('id', user?.id)
+        .single();
+
+      if (userError || !userData) throw new Error('Could not verify identity.');
+      if (userData.password !== deletePassword) {
+        setDeleteMessage('Incorrect password.');
+        setDeleting(false);
+        return;
+      }
+
       const { error } = await supabase.from('patients').delete().eq('id', id);
       if (error) {
         console.error('Error deleting patient', error);
@@ -189,6 +210,8 @@ const PatientProfile = () => {
     } finally {
       setDeleting(false);
       setShowDeleteModal(false);
+      setDeletePassword('');
+      setDeleteMessage('');
     }
   };
 
@@ -387,7 +410,7 @@ const PatientProfile = () => {
                     <div style={{ color: 'var(--muted)', fontSize: 13 }}>
                       {canViewSensitiveField(user, 'assessment_plan', enc) ? (enc.assessment_plan || '') : '[Restricted for nurse access]'}
                     </div>
-                    {getSensitivityLevel(enc) && (
+                    {isPhysician(user) && getSensitivityLevel(enc) && getSensitivityLevel(enc) !== 'normal' && (
                       <div style={{ color: 'var(--muted)', fontSize: 12 }}>
                         Sensitivity: {getSensitivityLevel(enc)}
                       </div>
@@ -559,8 +582,26 @@ const PatientProfile = () => {
                 <div style={{ color: 'var(--muted)', marginBottom: 12 }}>
                   Are you sure you want to delete <strong>{patient.name}</strong> ({patient.id})? This action cannot be undone.
                 </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: 'block', marginBottom: 4 }}>Enter your password to verify:</label>
+                  <input
+                    type="password"
+                    className="input"
+                    style={{ width: '100%' }}
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                  />
+                </div>
+
+                {deleteMessage && (
+                  <div style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>
+                    {deleteMessage}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                  <button className="btn" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+                  <button className="btn" onClick={() => { setShowDeleteModal(false); setDeletePassword(''); setDeleteMessage(''); }}>Cancel</button>
                   <button className="btn" onClick={handleDeletePatient} disabled={deleting} style={{ background: 'var(--danger)', color: '#fff' }}>
                     {deleting ? 'Deleting…' : 'Yes, delete'}
                   </button>
