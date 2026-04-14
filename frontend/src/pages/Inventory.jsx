@@ -35,8 +35,10 @@ const Inventory = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteItem, setDeleteItem] = useState(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
   const [deleteMessage, setDeleteMessage] = useState('');
   const [deleteMessageType, setDeleteMessageType] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   // ---------- Validation constraints & helpers (ADDED) ----------
   const NAME_MAX = 100;
@@ -847,8 +849,10 @@ const Inventory = () => {
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               {/* Cancel first, then Delete (swapped) */}
-              <button className="btn" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-              <button className="btn" onClick={submitDelete}>Delete Item</button>
+              <button className="btn" onClick={() => setShowDeleteModal(false)} disabled={deleting}>Cancel</button>
+              <button className="btn" onClick={submitDelete} disabled={deleting}>
+                {deleting ? 'Deleting...' : 'Delete Item'}
+              </button>
             </div>
           </div>
         </div>

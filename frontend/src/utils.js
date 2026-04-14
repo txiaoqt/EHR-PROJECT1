@@ -1,4 +1,5 @@
 // Utility functions
+import { supabase } from './supabaseClient.js';
 
 export const exportCsv = (filename = 'report.csv', csvData = "name,data\ndemo,1") => {
   const blob = new Blob([csvData], { type: 'text/csv' });
