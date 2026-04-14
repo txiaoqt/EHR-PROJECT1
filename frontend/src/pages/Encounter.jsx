@@ -489,7 +489,7 @@ const Encounter = () => {
                 </div>
                 {!canEditAssessmentPlan && (
                   <div style={{ marginTop: 8, fontSize: 13, color: 'var(--muted)' }}>
-                    Field restricted: Nurses cannot edit Assessment / Plan for high-sensitivity records.
+                    Physician-only field: nurses cannot edit Assessment / Plan.
                   </div>
                 )}
               </div>
