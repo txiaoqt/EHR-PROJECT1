@@ -1,98 +1,182 @@
 # About Security
 
-This file rechecks the 5 critical security items and shows current status.
+This document explains the security posture of the current TUP Clinic EHR codebase: what is already implemented, what layer enforces it, and what risks still remain.
 
-## 5-Point Security Recheck
+## Security Model In Place
 
-## 1) Plain-text passwords
+The system currently uses a **hybrid app-level + database-level** model:
 
-Status: **Done in code and schema**
+- App-level checks in React pages (`frontend/src/...`) for route access, role checks, and field restrictions.
+- Database constraints and triggers in SQL (`schema.sql`, `supabase/migrations/20260414103000_security_abac_clinic_hours.sql`) for guardrails.
+- Audit logging via `audit_logs` and optional `break_glass_audit_logs`.
 
-- Frontend login now uses Supabase Auth:
-  - `supabase.auth.signInWithPassword(...)`
-  - File: `frontend/src/pages/Login.jsx`
-- Password update now uses Supabase Auth:
-  - `supabase.auth.updateUser({ password })`
-  - File: `frontend/src/pages/Settings.jsx`
-- Plain-text `public.users.password` is removed in the new SQL:
-  - File: `schema_auth_rls.sql`
-- `public.users` is linked to `auth.users` via `auth_user_id`.
+## 1) Authentication and Session Behavior
 
-## 2) RLS disabled + broad CRUD grants
+### Implemented
 
-Status: **Done in new schema file**
+- Login requires email + password and blocks login outside clinic hours.
+  - Source: `frontend/src/pages/Login.jsx`, `frontend/src/pages/loginSecurity.js`
+- Failed login lockout logic is implemented:
+  - Max attempts: `5`
+  - Lock duration: `15 minutes`
+  - User fields used: `failed_login_attempts`, `last_failed_login_at`, `locked_until`
+- Auto-logout and route blocking outside clinic hours.
+  - Source: `frontend/src/App.jsx`
 
-- RLS is enabled across sensitive tables (`users`, `patients`, `encounters`, `appointments`, `inventory`, etc.).
-- Broad `anon` table access is revoked.
-- Policies are explicit per role and action.
-- Delete permissions are physician/admin only.
-- Nurse restrictions are enforced in DB (not only UI), including:
-  - nurse cannot modify `assessment_plan` (trigger)
-  - nurse updates are restricted to own appointments/encounters (ownership-aware policies)
-- File: `schema_auth_rls.sql`
+### Important Notes
 
-## 3) Hardcoded anon key fallback
+- CAPTCHA has been fully removed.
+- Session state is maintained through `AuthContext` and Supabase auth listener, but login credential validation is currently custom against `users` table.
 
-Status: **Done in code**
+## 2) RBAC (Role-Based Access Control)
 
-- Removed fallback URL/key from frontend.
-- App now fails fast if env vars are missing.
-- File: `frontend/src/supabaseClient.js`
+### Implemented Roles
 
-Manual action still required:
-- Rotate the exposed anon key in Supabase Project Settings.
-- Update Vercel env vars:
-  - `VITE_SUPABASE_URL`
-  - `VITE_SUPABASE_ANON_KEY`
+- `admin`
+- `physician`
+- `nurse`
 
-## 4) Legacy `user` role in signup UI
+Role values are constrained in SQL:
+- `users.role` check constraint
+- `role_permissions.role` check constraint
 
-Status: **Done by removing signup flow**
+### Implemented RBAC Behavior
 
-- `Signup.jsx` has been removed.
-- Account creation is now expected to be admin-managed via Supabase Auth dashboard/backend process.
-- Roles in DB are constrained to `admin | physician | nurse`.
+- Nurses cannot delete records.
+- Physicians/admin can delete records.
+- Nurse access is restricted for physician-only fields (such as `assessment_plan`).
+- Role-based menu/action hiding is present in major pages:
+  - `Appointments.jsx`
+  - `Encounters.jsx`
+  - `Encounter.jsx`
+  - `PatientProfile.jsx`
+  - `Inventory.jsx`
 
-## 5) Time rule only guarding writes in DB
+### DB RBAC Support
 
-Status: **Done in new schema file**
+- `role_permissions` table + helper function `has_role_permission(...)` exist in `schema.sql`.
 
-- `public.is_within_clinic_hours()` is now used inside RLS `USING` policies for **reads** as well.
-- This means direct table reads are also blocked outside 07:00-19:00 Asia/Manila (unless trusted bypass context is used).
-- File: `schema_auth_rls.sql`
+## 3) Rule-Based Access Control (Time Rule)
+
+### Implemented Rule
+
+- Allowed access window: **07:00 to 19:00 (Asia/Manila)**.
+
+### Enforcement Points
+
+- Frontend route/session guard:
+  - Blocks protected pages outside hours.
+  - Auto-logs out active users outside hours.
+  - Source: `frontend/src/App.jsx`, `frontend/src/accessControl.js`
+- Database write guard trigger:
+  - Blocks `INSERT/UPDATE/DELETE` outside clinic hours.
+  - Applied to major tables via `apply_clinic_hours_guard(...)`.
+  - Source: `supabase/migrations/20260414103000_security_abac_clinic_hours.sql`
+
+### Bypass Behavior
+
+- Trusted bypass is available for controlled channels:
+  - `service_role`, `postgres`, `supabase_admin`, or `set_config('app.bypass_clinic_hours','on',...)`
+
+## 4) ABAC (Attribute-Based Access Control)
+
+### Implemented Attributes
+
+- User-side attributes:
+  - `clearance_level`
+  - `department`
+  - `abac_attributes` (JSONB)
+- Record-side attributes:
+  - `sensitivity_level` (`normal`, `restricted`)
+  - `abac_tags` (text[])
+
+### Implemented ABAC Logic in App
+
+- High-sensitivity records and physician-only fields are restricted for nurses.
+- `assessment_plan` is masked for nurse users in views/exports.
+- Ownership-aware updates exist (example: clinician ownership checks):
+  - `isOwnerOrPrivileged(...)` in `accessControl.js`
+
+### Break-Glass Support
+
+- Optional emergency override audit table and insert helper exist:
+  - `break_glass_audit_logs`
+  - `log_break_glass_access(...)`
+- This is currently logging support, not full automatic policy override workflow.
+
+## 5) Data Integrity and Input Safety
+
+### Implemented
+
+- Input sanitization in key forms:
+  - Encounter: sanitizes search and validates vitals formats/ranges.
+  - Inventory: sanitizes names/reasons and numeric bounds.
+  - Patients: sanitizes search for ilike patterns.
+- Confirm-before-delete UX for destructive actions:
+  - Type patient ID/item name before deletion in multiple modules.
+- Foreign keys and check constraints in schema protect relational integrity.
+
+### Auditability
+
+- `audit_logs` table is actively written from frontend utility/helper and feature flows.
+
+## 6) Current Security Gaps (Important)
+
+These are critical to understand because they affect real security strength:
+
+1. Passwords are stored and compared as plain text in current flow.
+   - `schema.sql` defines `users.password text`
+   - `Login.jsx` compares `pass === user.password`
+
+2. Row Level Security (RLS) is disabled and broad table grants are enabled.
+   - `schema.sql` explicitly disables RLS on public tables.
+   - `anon` and `authenticated` roles are granted broad CRUD.
+   - This means app-side checks can be bypassed by direct API/table access.
+
+3. Supabase anon key has a hardcoded fallback in frontend code.
+   - Source: `frontend/src/supabaseClient.js`
+
+4. Signup still references legacy `'user'` default role in UI (`Signup.jsx`), while DB now enforces `admin|physician|nurse`.
+
+5. Time rule in DB currently guards writes; reads are still primarily controlled at app level.
+
+## 7) Practical Security Status
+
+### What is strong now
+
+- Clear RBAC/ABAC/rule-based logic in app behavior.
+- Clinic-hours enforcement in both UI and DB write path.
+- Lockout mechanism for repeated failed login.
+- Audit trails and break-glass logging structure.
+
+### What must be improved for production-grade security
+
+- Move to **Supabase Auth** for authentication (no plain-text passwords).
+- Enable **RLS policies** and remove wide-open anon CRUD grants.
+- Keep secrets only in environment variables (remove hardcoded fallback credentials/keys).
+- Enforce ABAC/RBAC at DB policy level, not just React UI.
+- Restrict report/export paths with server-side authorization checks.
+
+## 8) File Map (Where Security Logic Lives)
+
+- App guard and auto-logout:
+  - `frontend/src/App.jsx`
+- Access control helpers (RBAC/ABAC/time):
+  - `frontend/src/accessControl.js`
+- Login lockout + clinic-hour login gate:
+  - `frontend/src/pages/Login.jsx`
+  - `frontend/src/pages/loginSecurity.js`
+- Feature-level permission checks:
+  - `frontend/src/pages/Appointments.jsx`
+  - `frontend/src/pages/Encounter.jsx`
+  - `frontend/src/pages/Encounters.jsx`
+  - `frontend/src/pages/PatientProfile.jsx`
+  - `frontend/src/pages/Inventory.jsx`
+- Base schema and grants:
+  - `schema.sql`
+- Security migration (clinic-hours DB guard + ABAC fields + break-glass):
+  - `supabase/migrations/20260414103000_security_abac_clinic_hours.sql`
 
 ---
 
-## Additional ABAC/RBAC Policy Hardening Included
-
-In `schema_auth_rls.sql`, the following were also added:
-
-- Sensitivity-aware DB reads:
-  - `restricted` records are visible only to physician/admin via `can_access_sensitivity(...)`.
-- Ownership-aware updates:
-  - nurse can only update own clinical rows (`clinician_auth_user_id` / clinician name fallback).
-- `auth.users -> public.users` sync trigger:
-  - auto-link profile rows by email and `auth_user_id`.
-- Login lockout RPC helpers used by login page.
-
----
-
-## What You Must Do in Supabase Dashboard
-
-1. Run `schema_auth_rls.sql` in SQL Editor.
-2. Create clinic accounts in **Authentication -> Users**:
-   - `physician@tupclinic.local`
-   - `nurse@tupclinic.local`
-3. Disable public self-signup in Auth settings.
-4. Rotate anon key and update deployment env vars.
-
----
-
-## Primary Security Files
-
-- `schema_auth_rls.sql`
-- `frontend/src/pages/Login.jsx`
-- `frontend/src/pages/Settings.jsx`
-- `frontend/src/AuthContext.jsx`
-- `frontend/src/supabaseClient.js`
-- `frontend/src/accessControl.js`
+If you want, the next upgrade step is to create a **Security v2 migration** that enforces RBAC/ABAC/time rules with RLS and removes plaintext-password auth paths.
