@@ -3,91 +3,84 @@
 This diagram summarizes the major actors and system-wide use cases based on the current frontend + Supabase implementation.
 
 ```mermaid
-usecaseDiagram
-title TUP Clinic EHR - Overall Use Case
+flowchart LR
+  A[Admin]
+  P[Physician]
+  N[Nurse]
+  U[Clinic Staff User]
+  T[System Clock (Asia/Manila)]
 
-actor Admin as A
-actor Physician as P
-actor Nurse as N
-actor "Clinic Staff User" as U
-actor "System Clock (Asia/Manila)" as T
+  U --> A
+  U --> P
+  U --> N
 
-U <|-- A
-U <|-- P
-U <|-- N
+  subgraph SYS[TUP Clinic EHR System]
+    L[Login]
+    LO[Logout]
+    VD[View Dashboard]
+    MA[Manage Appointments]
+    MP[Manage Patients]
+    RE[Record Encounter]
+    ME[Manage Encounters]
+    MI[Manage Inventory]
+    GR[Generate Reports]
+    EC[Export Clinical Data]
+    VP[View / Update My Profile]
+    VA[View Audit Activity]
+    MS[Manage Settings]
+    SB[Run System Backup Export]
+    CH[Enforce Clinic Hours Rule]
+    AC[Enforce RBAC / ABAC Restrictions]
+  end
 
-rectangle "TUP Clinic EHR System" {
-  (Login)
-  (Logout)
-  (View Dashboard)
+  U --> L
+  U --> LO
+  U --> VD
+  U --> VP
+  U --> VA
 
-  (Manage Appointments)
-  (Manage Patients)
-  (Record Encounter)
-  (Manage Encounters)
-  (Manage Inventory)
+  A --> MA
+  P --> MA
+  N --> MA
 
-  (Generate Reports)
-  (Export Clinical Data)
+  A --> MP
+  P --> MP
+  N --> MP
 
-  (View / Update My Profile)
-  (View Audit Activity)
+  A --> RE
+  P --> RE
+  N --> RE
 
-  (Manage Settings)
-  (Run System Backup Export)
+  A --> ME
+  P --> ME
+  N --> ME
 
-  (Enforce Clinic Hours Rule)
-  (Enforce RBAC / ABAC Restrictions)
-}
+  A --> MI
+  P --> MI
+  N --> MI
 
-U --> (Login)
-U --> (Logout)
-U --> (View Dashboard)
-U --> (View / Update My Profile)
-U --> (View Audit Activity)
+  A --> GR
+  P --> GR
+  N --> GR
 
-A --> (Manage Appointments)
-P --> (Manage Appointments)
-N --> (Manage Appointments)
+  A --> EC
+  P --> EC
 
-A --> (Manage Patients)
-P --> (Manage Patients)
-N --> (Manage Patients)
+  A --> MS
+  A --> SB
 
-A --> (Record Encounter)
-P --> (Record Encounter)
-N --> (Record Encounter)
+  L -. include .-> CH
+  VD -. include .-> CH
+  MA -. include .-> AC
+  MP -. include .-> AC
+  RE -. include .-> AC
+  ME -. include .-> AC
+  MI -. include .-> AC
+  GR -. include .-> AC
+  EC -. include .-> AC
+  MS -. include .-> AC
 
-A --> (Manage Encounters)
-P --> (Manage Encounters)
-N --> (Manage Encounters)
-
-A --> (Manage Inventory)
-P --> (Manage Inventory)
-N --> (Manage Inventory)
-
-A --> (Generate Reports)
-P --> (Generate Reports)
-N --> (Generate Reports)
-
-A --> (Export Clinical Data)
-P --> (Export Clinical Data)
-
-A --> (Manage Settings)
-A --> (Run System Backup Export)
-
-(Login) ..> (Enforce Clinic Hours Rule) : <<include>>
-(View Dashboard) ..> (Enforce Clinic Hours Rule) : <<include>>
-(Manage Appointments) ..> (Enforce RBAC / ABAC Restrictions) : <<include>>
-(Manage Patients) ..> (Enforce RBAC / ABAC Restrictions) : <<include>>
-(Record Encounter) ..> (Enforce RBAC / ABAC Restrictions) : <<include>>
-(Manage Encounters) ..> (Enforce RBAC / ABAC Restrictions) : <<include>>
-(Manage Inventory) ..> (Enforce RBAC / ABAC Restrictions) : <<include>>
-(Generate Reports) ..> (Enforce RBAC / ABAC Restrictions) : <<include>>
-(Export Clinical Data) ..> (Enforce RBAC / ABAC Restrictions) : <<include>>
-(Manage Settings) ..> (Enforce RBAC / ABAC Restrictions) : <<include>>
-
-T --> (Enforce Clinic Hours Rule)
+  T --> CH
 ```
 
 ## Notes
