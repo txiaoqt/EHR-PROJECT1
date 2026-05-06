@@ -8,79 +8,75 @@ flowchart LR
   P[Physician]
   N[Nurse]
   U[Clinic Staff User]
-  T[System Clock (Asia/Manila)]
-
-  U --> A
-  U --> P
-  U --> N
+  T["System Clock (Asia/Manila)"]
 
   subgraph SYS[TUP Clinic EHR System]
-    L[Login]
-    LO[Logout]
-    VD[View Dashboard]
-    MA[Manage Appointments]
-    MP[Manage Patients]
-    RE[Record Encounter]
-    ME[Manage Encounters]
-    MI[Manage Inventory]
-    GR[Generate Reports]
-    EC[Export Clinical Data]
-    VP[View / Update My Profile]
-    VA[View Audit Activity]
-    MS[Manage Settings]
-    SB[Run System Backup Export]
-    CH[Enforce Clinic Hours Rule]
-    AC[Enforce RBAC / ABAC Restrictions]
+    L([Login])
+    LO([Logout])
+    VD([View Dashboard])
+    MA([Manage Appointments])
+    MP([Manage Patients])
+    RE([Record Encounter])
+    ME([Manage Encounters])
+    MI([Manage Inventory])
+    GR([Generate Reports])
+    EC([Export Clinical Data])
+    VP([View / Update My Profile])
+    VA([View Audit Activity])
+    MS([Manage Settings])
+    SB([Run System Backup Export])
+    CH([Enforce Clinic Hours Rule])
+    AC([Enforce RBAC / ABAC Restrictions])
   end
 
-  U --> L
-  U --> LO
-  U --> VD
-  U --> VP
-  U --> VA
+  U --- L
+  U --- LO
+  U --- VD
+  U --- VP
+  U --- VA
 
-  A --> MA
-  P --> MA
-  N --> MA
+  A --- MA
+  P --- MA
+  N --- MA
 
-  A --> MP
-  P --> MP
-  N --> MP
+  A --- MP
+  P --- MP
+  N --- MP
 
-  A --> RE
-  P --> RE
-  N --> RE
+  A --- RE
+  P --- RE
+  N --- RE
 
-  A --> ME
-  P --> ME
-  N --> ME
+  A --- ME
+  P --- ME
+  N --- ME
 
-  A --> MI
-  P --> MI
-  N --> MI
+  A --- MI
+  P --- MI
+  N --- MI
 
-  A --> GR
-  P --> GR
-  N --> GR
+  A --- GR
+  P --- GR
+  N --- GR
 
-  A --> EC
-  P --> EC
+  A --- EC
+  P --- EC
 
-  A --> MS
-  A --> SB
+  A --- MS
+  A --- SB
 
-  L -. include .-> CH
-  VD -. include .-> CH
-  MA -. include .-> AC
-  MP -. include .-> AC
-  RE -. include .-> AC
-  ME -. include .-> AC
-  MI -. include .-> AC
-  GR -. include .-> AC
-  EC -. include .-> AC
-  MS -. include .-> AC
+  L -. <<include>> .-> CH
+  VD -. <<include>> .-> CH
+  MA -. <<include>> .-> AC
+  MP -. <<include>> .-> AC
+  RE -. <<include>> .-> AC
+  ME -. <<include>> .-> AC
+  MI -. <<include>> .-> AC
+  GR -. <<include>> .-> AC
+  EC -. <<include>> .-> AC
+  MS -. <<include>> .-> AC
 
-  T --> CH
+  T --- CH
 ```
 
 ## Notes
