@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient.js';
 import { useAuth } from '../AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
+import avatarPlaceholder from '../assets/images/avatar-placeholder.jpg';
 
 const MyProfile = () => {
   const { user: authUser, updateUser } = useAuth();
@@ -386,7 +387,7 @@ const MyProfile = () => {
             {/* Profile Picture */}
             <div style={{ textAlign: 'center' }}>
               <img
-                src={isEditing ? (editableUser.avatar || '/src/assets/images/avatar-placeholder.jpg') : (user.avatar || '/src/assets/images/avatar-placeholder.jpg')}
+                src={isEditing ? (editableUser.avatar || avatarPlaceholder) : (user.avatar || avatarPlaceholder)}
                 alt="Profile"
                 onClick={isEditing ? openFileInput : undefined}
                 style={{

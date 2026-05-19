@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../AuthContext.jsx';
+import tupehrlogo from '../../assets/images/tupehrlogo.jpg';
+import avatarPlaceholder from '../../assets/images/avatar-placeholder.jpg';
 
 const PATIENT_NAV = [
   { path: '/patient/dashboard', label: 'Home' },
@@ -41,7 +43,7 @@ const PatientSidebar = () => {
         <div className="sidebar-header">
           <div className="brand">
             <div className="logo">
-              <img src="/src/assets/images/tupehrlogo.jpg" alt="TUP EHR logo" className="logo-img" />
+              <img src={tupehrlogo} alt="TUP EHR logo" className="logo-img" />
             </div>
             <div>
               <h1 className="brand-title">TUP Clinic</h1>
@@ -55,7 +57,7 @@ const PatientSidebar = () => {
             aria-expanded={profileMenuOpen}
             onClick={() => setProfileMenuOpen((s) => !s)}
           >
-            <img src={user?.avatar || '/src/assets/images/avatar-placeholder.jpg'} alt="Profile" className="avatar" />
+            <img src={user?.avatar || avatarPlaceholder} alt="Profile" className="avatar" />
           </button>
 
           <div className={`profile-menu ${profileMenuOpen ? '' : 'hidden'}`}>

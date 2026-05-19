@@ -10,6 +10,8 @@ import {
   LOCKOUT_MINUTES,
   MAX_FAILED_ATTEMPTS,
 } from './loginSecurity.js';
+import bg1Image from '../assets/images/bg1.jpg';
+import tupehrlogo from '../assets/images/tupehrlogo.jpg';
 
 const DEPLOY_SURFACE = (import.meta.env.VITE_DEPLOY_SURFACE || 'admin').toLowerCase();
 const IS_ADMIN_SURFACE = DEPLOY_SURFACE === 'admin';
@@ -295,7 +297,7 @@ const Login = () => {
       style={{
         minHeight: '100vh',
         // keep bg1 as requested
-        background: `url('../src/assets/images/bg1.jpg') no-repeat center center fixed`,
+        background: `url(${bg1Image}) no-repeat center center fixed`,
         backgroundSize: 'cover',
         backgroundAttachment: 'fixed',
         filter: 'brightness(0.95)',
@@ -329,7 +331,7 @@ const Login = () => {
           >
             <div className="brand-row" style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 10 }}>
               <img
-                src="../src/assets/images/tupehrlogo.jpg"
+                src={tupehrlogo}
                 alt="TUP EHR Logo"
                 className="brand-logo"
                 style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'contain', padding: 8 }}

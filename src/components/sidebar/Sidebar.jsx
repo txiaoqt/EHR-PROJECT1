@@ -4,6 +4,8 @@ import { translate } from '../../utils';
 import { useAuth } from '../../AuthContext.jsx';
 import { supabase } from '../../supabaseClient.js';
 import { isPhysician } from '../../accessControl.js';
+import tupehrlogo from '../../assets/images/tupehrlogo.jpg';
+import avatarPlaceholder from '../../assets/images/avatar-placeholder.jpg';
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -134,7 +136,7 @@ const Sidebar = () => {
         <div className="sidebar-header">
           <div className="brand">
             <div className="logo">
-              <img src="/src/assets/images/tupehrlogo.jpg" alt="TUP EHR logo" className="logo-img" />
+              <img src={tupehrlogo} alt="TUP EHR logo" className="logo-img" />
             </div>
             <div>
               <h1 className="brand-title">TUP Clinic</h1>
@@ -149,7 +151,7 @@ const Sidebar = () => {
             aria-expanded={profileMenuOpen}
             onClick={toggleProfileMenu}
           >
-            <img src="/src/assets/images/avatar-placeholder.jpg" alt="Profile" className="avatar" />
+            <img src={avatarPlaceholder} alt="Profile" className="avatar" />
           </button>
 
           <div id="profileMenu" className={`profile-menu ${profileMenuOpen ? '' : 'hidden'}`}>
