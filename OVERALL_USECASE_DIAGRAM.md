@@ -1,63 +1,123 @@
 # TUP Clinic EHR - General Use Case Diagram
 
-This is a simplified general use case diagram for the current TUP Clinic EHR app. It follows the simple format shown in the reference: actors outside the system boundary, main system use cases inside, and direct association lines.
+This version follows the sample format: stickman actors, one system boundary, oval use cases, and `<<include>>` relationships. Monochrome only (no colors).
 
-```mermaid
-%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial","fontSize":"16px","primaryTextColor":"#222","lineColor":"#555"},"flowchart":{"curve":"linear","nodeSpacing":60,"rankSpacing":80,"useMaxWidth":true}}}%%
-flowchart LR
-  Patient["Patient / Student"]
-  Walkin["Walk-in Patient"]
+```plantuml
+@startuml
+left to right direction
+skinparam monochrome true
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle stickman
 
-  subgraph SYS["TUP Clinic EHR System"]
-    direction TB
-    UC1([Register / Log In])
-    UC2([Book Appointment])
-    UC3([View Queue / Appointment Status])
-    UC4([View Patient Records])
-    UC5([Send / Reply to Messages])
-    UC6([Manage Patient Records])
-    UC7([Manage Appointments and Queue])
-    UC8([Record Consultation / Encounter])
-    UC9([Manage Inventory])
-    UC10([Generate Reports and Analytics])
-    UC11([Manage Settings, Users, Audit, and Backup])
-  end
+title TUP Clinic EHR: Electronic Health Records System
 
-  Staff["Doctor / Nurse / Clinic Staff"]
-  Admin["Admin / IT"]
+actor "Patient / Student\n(Online Patient Portal User)" as PAT
+actor "Walk-in Patient\n(Self-Service Kiosk User)" as WLK
+actor "Doctor / Dentist" as DOC
+actor "Nurse / Clinic Staff" as NUR
+actor "Admin / IT" as ADM
 
-  Patient --- UC1
-  Patient --- UC2
-  Patient --- UC3
-  Patient --- UC4
-  Patient --- UC5
+rectangle "TUP Clinic EHR System" {
 
-  Walkin --- UC2
-  Walkin --- UC3
+  (Register / Login\n(Online Patient Portal)) as P1
+  (Browse Clinics and\nAvailable Services) as P2
+  (Book Same-day or\nFuture Appointment) as P3
+  (View Appointment /\nQueue Status) as P4
+  (View Own Records\nand Vitals) as P5
+  (Send Follow-up\nClinic Messages) as P6
 
-  UC4 --- Staff
-  UC5 --- Staff
-  UC6 --- Staff
-  UC7 --- Staff
-  UC8 --- Staff
-  UC9 --- Staff
-  UC10 --- Staff
+  (Enter Student ID /\nQR Verification) as K1
+  (Select Department /\nService via Kiosk) as K2
+  (Book Same-day\nAppointment via Kiosk) as K3
+  (Generate Queue Number /\nReference Slip) as K4
 
-  UC10 --- Admin
-  UC11 --- Admin
+  (Secure Authentication) as C1
+  (Select Department /\nService) as C2
+  (View Available Slots) as C3
+  (Manage Centralized\nAppointment Scheduling) as C4
+  (Manage Walk-in Queue) as C5
+  (Update Consultation\nStatus) as C6
+  (Enforce Role / Clinic-Hours\nAccess Rules) as C7
+  (Write Audit Log) as C8
 
-  classDef actor fill:#fff,stroke:#222,stroke-width:2px,color:#111;
-  classDef usecase fill:#fff2cc,stroke:#b7a25a,stroke-width:1.5px,color:#222;
+  (View Patient Records) as D1
+  (Record Consultation /\nEncounter) as D2
+  (Mark Visit as Completed) as D3
+  (Manage Appointments\nand Queue) as D4
+  (Reply to Patient Messages) as D5
+  (Generate Reports\nand Analytics) as D6
 
-  class Patient,Walkin,Staff,Admin actor;
-  class UC1,UC2,UC3,UC4,UC5,UC6,UC7,UC8,UC9,UC10,UC11 usecase;
+  (Manage Patient Records) as N1
+  (Manage Walk-in Queue) as N2
+  (Update Patient Profile\nNotes) as N3
+  (Manage Inventory) as N4
+
+  (Manage User Accounts\nand Roles) as A1
+  (Manage System Settings) as A2
+  (View Audit Logs) as A3
+  (Backup and Export\nSystem Data) as A4
+}
+
+PAT -- P1
+PAT -- P2
+PAT -- P3
+PAT -- P4
+PAT -- P5
+PAT -- P6
+
+WLK -- K1
+WLK -- K2
+WLK -- K3
+WLK -- K4
+
+DOC -- D1
+DOC -- D2
+DOC -- D3
+DOC -- D4
+DOC -- D5
+DOC -- D6
+
+NUR -- N1
+NUR -- N2
+NUR -- N3
+NUR -- N4
+NUR -- D5
+NUR -- D6
+
+ADM -- A1
+ADM -- A2
+ADM -- A3
+ADM -- A4
+
+P1 .> C1 : <<include>>
+P3 .> C2 : <<include>>
+P3 .> C3 : <<include>>
+P3 .> C4 : <<include>>
+P4 .> C5 : <<include>>
+P6 .> C8 : <<include>>
+
+K2 .> C2 : <<include>>
+K3 .> C4 : <<include>>
+K4 .> C5 : <<include>>
+
+D2 .> C8 : <<include>>
+D3 .> C6 : <<include>>
+D4 .> C4 : <<include>>
+D5 .> C8 : <<include>>
+D6 .> C7 : <<include>>
+
+N1 .> C7 : <<include>>
+N2 .> C5 : <<include>>
+N3 .> C8 : <<include>>
+N4 .> C8 : <<include>>
+
+A1 .> C7 : <<include>>
+A2 .> C8 : <<include>>
+A3 .> C8 : <<include>>
+A4 .> C7 : <<include>>
+
+@enduml
 ```
 
-**Figure:** General Use Case Diagram of the TUP Clinic EHR System
-
-**Actors**
-
-- Patient / Student: uses the online patient portal.
-- Walk-in Patient: uses the kiosk booking flow.
-- Doctor / Nurse / Clinic Staff: manages clinical and operational workflows.
-- Admin / IT: handles administrative, audit, backup, and system settings workflows.
+Figure: General Use Case Diagram of the TUP Clinic EHR System
