@@ -6,7 +6,7 @@ There is no Python backend in the current architecture.
 
 ## Stack
 
-- Frontend: React + Vite (`frontend/`)
+- Frontend: React + Vite (repo root)
 - Database/Auth/Storage: Supabase
 - Hosting: Vercel (configured via `vercel.json`)
 
@@ -19,22 +19,15 @@ npm install
 npm run dev
 ```
 
-Or run directly inside `frontend/`:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
 ## Environment Variables
 
-Set these in `frontend/.env` (or in Vercel project settings):
+Set these in `.env` (or in Vercel project settings):
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+- `VITE_DEPLOY_SURFACE` (`admin` or `user`)
 
-See [frontend/.env.example](frontend/.env.example).
+See [.env.example](.env.example).
 
 ## Build
 
@@ -45,9 +38,20 @@ npm run build
 ## Vercel Deployment
 
 - `vercel.json` is already configured to:
-  - install from `frontend`
-  - build from `frontend`
-  - publish `frontend/dist`
+  - install from the repo root
+  - build from the repo root
+  - publish `dist`
   - handle SPA routing fallback
 
 After importing the repo in Vercel, only add the two `VITE_...` env vars and deploy.
+
+## Split Deployment (Admin vs User)
+
+Deploy the same repo twice in Vercel with different env values:
+
+- Admin portal deployment:
+  - `VITE_DEPLOY_SURFACE=admin`
+  - shows nurse/physician login + staff modules
+- User portal deployment:
+  - `VITE_DEPLOY_SURFACE=user`
+  - shows patient login/signup + patient modules

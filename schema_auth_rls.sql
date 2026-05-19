@@ -15,10 +15,17 @@ alter table if exists public.users
   add column if not exists last_failed_login_at timestamptz,
   add column if not exists locked_until timestamptz,
   add column if not exists lockout_reason text,
-  add column if not exists last_login_at timestamptz;
+  add column if not exists last_login_at timestamptz,
+  add column if not exists patient_id text references public.patients(id) on update cascade on delete set null;
 
 alter table if exists public.appointments
-  add column if not exists clinician_auth_user_id uuid references auth.users(id) on delete set null;
+  add column if not exists clinician_auth_user_id uuid references auth.users(id) on delete set null,
+  add column if not exists source text not null default 'staff',
+  add column if not exists department text not null default 'Medical Clinic',
+  add column if not exists appointment_type text not null default 'Future Appointment',
+  add column if not exists service_type text,
+  add column if not exists queue_number integer,
+  add column if not exists reference_code text;
 
 alter table if exists public.encounters
   add column if not exists clinician_auth_user_id uuid references auth.users(id) on delete set null;
@@ -53,6 +60,23 @@ begin
 end
 $$;
 
+create table if not exists public.patient_messages (
+  id uuid primary key default gen_random_uuid(),
+  patient_id text not null references public.patients(id) on update cascade on delete cascade,
+  patient_name text,
+  sender_role text not null check (sender_role in ('patient', 'physician', 'nurse', 'admin', 'clinic')),
+  sender_name text,
+  recipient_name text,
+  concern_type text not null default 'General clinic inquiry',
+  message_text text not null,
+  status text not null default 'sent' check (status in ('sent', 'read', 'archived')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_patient_messages_patient_id on public.patient_messages (patient_id);
+create index if not exists idx_patient_messages_created_at on public.patient_messages (created_at desc);
+
 do $$
 begin
   if exists (
@@ -64,6 +88,50 @@ begin
   ) then
     alter table public.users
       alter column password drop not null;
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.appointments'::regclass
+      and conname = 'appointments_source_check'
+  ) then
+    alter table public.appointments
+      add constraint appointments_source_check
+      check (source in ('staff', 'portal', 'kiosk'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.appointments'::regclass
+      and conname = 'appointments_department_check'
+  ) then
+    alter table public.appointments
+      add constraint appointments_department_check
+      check (department in ('Medical Clinic', 'Dental Clinic'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.appointments'::regclass
+      and conname = 'appointments_appointment_type_check'
+  ) then
+    alter table public.appointments
+      add constraint appointments_appointment_type_check
+      check (appointment_type in ('Same-day Appointment', 'Future Appointment'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.patient_messages'::regclass
+      and conname = 'patient_messages_concern_type_check'
+  ) then
+    alter table public.patient_messages
+      add constraint patient_messages_concern_type_check
+      check (concern_type in ('Appointment concern', 'Follow-up question', 'Medical inquiry', 'Dental inquiry', 'General clinic inquiry'));
   end if;
 end
 $$;
@@ -370,6 +438,7 @@ declare
     'settings',
     'audit_logs',
     'profiles',
+    'patient_messages',
     'break_glass_audit_logs'
   ];
 begin
@@ -420,6 +489,7 @@ using (
   public.is_within_clinic_hours()
   and (
     auth_user_id = auth.uid()
+    or (public.current_app_role() = 'patient' and patient_id is not null)
     or public.is_physician_or_admin()
   )
 );
@@ -471,13 +541,39 @@ using (
 
 create policy appointments_select_policy on public.appointments
 for select to authenticated
-using (public.is_within_clinic_hours());
+using (
+  public.is_within_clinic_hours()
+  and (
+    public.current_app_role() in ('admin', 'physician', 'nurse')
+    or (
+      public.current_app_role() = 'patient'
+      and patient_id in (
+        select u.patient_id
+        from public.users u
+        where u.auth_user_id = auth.uid()
+          and u.patient_id is not null
+      )
+    )
+  )
+);
 
 create policy encounters_select_policy on public.encounters
 for select to authenticated
 using (
   public.is_within_clinic_hours()
   and public.can_access_sensitivity(sensitivity_level)
+  and (
+    public.current_app_role() in ('admin', 'physician', 'nurse')
+    or (
+      public.current_app_role() = 'patient'
+      and patient_id in (
+        select u.patient_id
+        from public.users u
+        where u.auth_user_id = auth.uid()
+          and u.patient_id is not null
+      )
+    )
+  )
 );
 
 create policy inventory_select_policy on public.inventory
@@ -521,7 +617,21 @@ with check (public.is_within_clinic_hours() and public.current_app_role() in ('a
 
 create policy appointments_insert_policy on public.appointments
 for insert to authenticated
-with check (public.is_within_clinic_hours() and public.current_app_role() in ('admin', 'physician', 'nurse'));
+with check (
+  public.is_within_clinic_hours()
+  and (
+    public.current_app_role() in ('admin', 'physician', 'nurse')
+    or (
+      public.current_app_role() = 'patient'
+      and patient_id in (
+        select u.patient_id
+        from public.users u
+        where u.auth_user_id = auth.uid()
+          and u.patient_id is not null
+      )
+    )
+  )
+);
 
 create policy appointments_update_physician_admin_policy on public.appointments
 for update to authenticated
@@ -544,6 +654,66 @@ with check (
   and (
     clinician_auth_user_id = auth.uid()
     or lower(coalesce(clinician_name, '')) = lower(public.current_clinician_name())
+  )
+);
+
+create policy appointments_update_patient_own_policy on public.appointments
+for update to authenticated
+using (
+  public.is_within_clinic_hours()
+  and public.current_app_role() = 'patient'
+  and patient_id in (
+    select u.patient_id
+    from public.users u
+    where u.auth_user_id = auth.uid()
+      and u.patient_id is not null
+  )
+)
+with check (
+  public.is_within_clinic_hours()
+  and public.current_app_role() = 'patient'
+  and patient_id in (
+    select u.patient_id
+    from public.users u
+    where u.auth_user_id = auth.uid()
+      and u.patient_id is not null
+  )
+);
+
+create policy patient_messages_select_policy on public.patient_messages
+for select to authenticated
+using (
+  public.is_within_clinic_hours()
+  and (
+    public.current_app_role() in ('admin', 'physician', 'nurse')
+    or (
+      public.current_app_role() = 'patient'
+      and patient_id in (
+        select u.patient_id
+        from public.users u
+        where u.auth_user_id = auth.uid()
+          and u.patient_id is not null
+      )
+    )
+  )
+);
+
+create policy patient_messages_insert_policy on public.patient_messages
+for insert to authenticated
+with check (
+  public.is_within_clinic_hours()
+  and (
+    public.current_app_role() in ('admin', 'physician', 'nurse')
+    or (
+      public.current_app_role() = 'patient'
+      and sender_role = 'patient'
+      and patient_id in (
+        select u.patient_id
+        from public.users u
+        where u.auth_user_id = auth.uid()
+          and u.patient_id is not null
+      )
+    )
   )
 );
 

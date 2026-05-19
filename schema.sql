@@ -11,7 +11,7 @@ create table if not exists public.users (
   name text not null,
   email text not null unique,
   password text not null,
-  role text not null default 'nurse' check (role in ('admin', 'physician', 'nurse')),
+  role text not null default 'nurse' check (role in ('admin', 'physician', 'nurse', 'patient')),
   avatar text,
   active boolean not null default true,
   created_at timestamptz not null default now(),
@@ -21,7 +21,7 @@ create table if not exists public.users (
 -- ROLE PERMISSIONS
 -- This table defines module access per role for app-level RBAC checks.
 create table if not exists public.role_permissions (
-  role text not null check (role in ('admin', 'physician', 'nurse')),
+  role text not null check (role in ('admin', 'physician', 'nurse', 'patient')),
   module text not null,
   can_view boolean not null default true,
   can_create boolean not null default false,
@@ -36,7 +36,7 @@ create table if not exists public.role_permissions (
 create table if not exists public.students (
   id text primary key,
   name text not null,
-  year integer not null check (year >= 1 and year <= 8),
+  year integer not null check (year >= 1 and year <= 5),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -45,7 +45,7 @@ create table if not exists public.students (
 create table if not exists public.patients (
   id text primary key references public.students(id) on update cascade on delete restrict,
   name text not null,
-  year integer not null check (year >= 1 and year <= 8),
+  year integer not null check (year >= 1 and year <= 5),
   last_visit_date date,
   medications text,
   allergies text,
@@ -53,6 +53,9 @@ create table if not exists public.patients (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table if exists public.users
+  add column if not exists patient_id text references public.patients(id) on update cascade on delete set null;
 
 -- APPOINTMENTS
 create table if not exists public.appointments (
@@ -65,6 +68,12 @@ create table if not exists public.appointments (
   clinician_name text not null,
   clinician_id text,
   clinician text,
+  source text not null default 'staff' check (source in ('staff', 'portal', 'kiosk')),
+  department text not null default 'Medical Clinic' check (department in ('Medical Clinic', 'Dental Clinic')),
+  appointment_type text not null default 'Future Appointment' check (appointment_type in ('Same-day Appointment', 'Future Appointment')),
+  service_type text,
+  queue_number integer,
+  reference_code text,
   status text not null default 'Scheduled' check (status in ('Scheduled', 'Checked-in', 'Cancelled', 'Completed')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -141,6 +150,21 @@ create table if not exists public.audit_logs (
   created_at timestamptz not null default now()
 );
 
+-- PATIENT MESSAGES
+create table if not exists public.patient_messages (
+  id uuid primary key default gen_random_uuid(),
+  patient_id text not null references public.patients(id) on update cascade on delete cascade,
+  patient_name text,
+  sender_role text not null check (sender_role in ('patient', 'physician', 'nurse', 'admin', 'clinic')),
+  sender_name text,
+  recipient_name text,
+  concern_type text not null default 'General clinic inquiry' check (concern_type in ('Appointment concern', 'Follow-up question', 'Medical inquiry', 'Dental inquiry', 'General clinic inquiry')),
+  message_text text not null,
+  status text not null default 'sent' check (status in ('sent', 'read', 'archived')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- PROFILES (optional helper table read by Dashboard fallback)
 create table if not exists public.profiles (
   id uuid primary key,
@@ -180,6 +204,8 @@ create index if not exists idx_inventory_txn_type on public.inventory_transactio
 create index if not exists idx_audit_logs_created_at on public.audit_logs (created_at desc);
 create index if not exists idx_audit_logs_action on public.audit_logs (action);
 create index if not exists idx_audit_logs_performed_by on public.audit_logs (performed_by);
+create index if not exists idx_patient_messages_patient_id on public.patient_messages (patient_id);
+create index if not exists idx_patient_messages_created_at on public.patient_messages (created_at desc);
 
 -- updated_at trigger
 create or replace function public.set_updated_at()
@@ -259,6 +285,11 @@ create trigger trg_role_permissions_set_updated_at
 before update on public.role_permissions
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists trg_patient_messages_set_updated_at on public.patient_messages;
+create trigger trg_patient_messages_set_updated_at
+before update on public.patient_messages
+for each row execute procedure public.set_updated_at();
+
 -- Keep access simple for current frontend usage (anon key + direct table access)
 alter table public.users disable row level security;
 alter table public.role_permissions disable row level security;
@@ -271,6 +302,7 @@ alter table public.inventory_transactions disable row level security;
 alter table public.settings disable row level security;
 alter table public.audit_logs disable row level security;
 alter table public.profiles disable row level security;
+alter table public.patient_messages disable row level security;
 
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to anon, authenticated;
@@ -307,7 +339,12 @@ insert into public.role_permissions (role, module, can_view, can_create, can_upd
 ('nurse', 'inventory', true, true, true, false),
 ('nurse', 'reports', true, true, false, false),
 ('nurse', 'settings', false, false, false, false),
-('nurse', 'users', false, false, false, false)
+('nurse', 'users', false, false, false, false),
+('patient', 'patient_dashboard', true, false, false, false),
+('patient', 'patient_schedule', true, true, true, false),
+('patient', 'patient_messages', true, true, false, false),
+('patient', 'patient_records', true, false, false, false),
+('patient', 'patient_profile', true, true, true, false)
 on conflict (role, module) do update set
   can_view = excluded.can_view,
   can_create = excluded.can_create,

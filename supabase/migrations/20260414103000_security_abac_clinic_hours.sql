@@ -50,7 +50,7 @@ begin
     ) then
       alter table public.users
         add constraint users_role_check
-        check (role in ('admin', 'physician', 'nurse'));
+        check (role in ('admin', 'physician', 'nurse', 'patient'));
     end if;
   end if;
 
@@ -79,7 +79,7 @@ begin
     ) then
       alter table public.role_permissions
         add constraint role_permissions_role_check
-        check (role in ('admin', 'physician', 'nurse'));
+        check (role in ('admin', 'physician', 'nurse', 'patient'));
     end if;
   end if;
 end

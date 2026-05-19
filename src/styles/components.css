@@ -1,0 +1,506 @@
+/* components.css - Buttons, Sidebar, Cards, Forms, Tables */
+
+/* base card */
+.card {
+  background: linear-gradient(180deg, rgba(0,0,0,0.02), rgba(255,255,255,0.00));
+  padding: 16px;
+  border-radius: 12px;
+  color: var(--text);
+  box-shadow: 0 6px 18px rgba(12,12,14,0.06);
+}
+
+/* buttons */
+.btn {
+  display:inline-flex; align-items:center; gap:8px;
+  background: linear-gradient(90deg, var(--accent), var(--danger));
+  color: white; border: none; padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight:600;
+}
+.btn.secondary {
+  background: transparent; color: var(--muted); border: 1px solid rgba(0,0,0,0.06);
+}
+.btn.small { padding:6px 10px; font-size:13px; }
+
+/* --- BUTTON HOVER EFFECT (Darker Shade Only — No Movement) --- */
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.321);
+}
+
+.btn.secondary:hover:not(:disabled) {
+  background: rgb(255, 255, 255);
+  color: var(--text);
+  border-color: rgba(0,0,0,0.15);
+  box-shadow: 0 4px 10px rgba(51, 51, 51, 0.178);
+}
+
+/* active click state */
+.btn:active:not(:disabled),
+.btn.secondary:active:not(:disabled) {
+  filter: brightness(0.85);
+  box-shadow: none;
+}
+
+/* disabled state safety */
+.btn:disabled,
+.btn.secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: none;
+  box-shadow: none;
+}
+
+
+/* inputs */
+.input, input[type="text"], input[type="search"], input[type="date"], textarea, select {
+  padding:10px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:transparent; color:var(--text);
+}
+.input::placeholder, input::placeholder, textarea::placeholder { color: var(--muted); }
+
+/* --- Search Inputs With PNG Icon --- */
+
+input[type="search"],
+.input.search,
+input.search {
+  background-image: url('../assets/icons/search.png');
+  background-repeat: no-repeat;
+  background-position: 12px center;
+  background-size: 16px;
+
+  padding-left: 40px !important; /* space for the icon */
+}
+
+/* Logo container (keeps existing .logo style) */
+.logo { display:flex; align-items:center; justify-content:center; }
+
+/* Image inside the logo — keep it crisp and contained */
+.logo-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;   /* preserve aspect ratio */
+  border-radius: 8px;    /* soft corners — remove if you want square */
+  display: block;
+}
+
+/* Brand title (smaller) */
+.brand-title{
+  margin: 0;
+  font-size: 14px;      /* reduced from larger value */
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+
+/* brand subtitle */
+.brand-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* sidebar */
+.sidebar {
+  width: var(--sidebar-width);
+  background: linear-gradient(180deg, var(--panel), rgba(0,0,0,0.03));
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--muted);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  position: relative;
+
+  overflow-x: hidden;   /* ← ADD THIS */
+}
+
+
+/* header with profile on top-right */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand { display:flex; align-items:center; gap:12px; }
+.logo { width:44px; height:44px; border-radius:10px; background: linear-gradient(135deg, var(--accent-3), var(--accent)); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; }
+
+/* profile button (top-right) */
+.profile-btn { background:transparent; border:none; cursor:pointer; padding:2px; }
+.avatar { width:44px; height:44px; border-radius:10px; object-fit:cover; background:linear-gradient(135deg,var(--accent-3),var(--accent)); }
+/* PROFILE DROPDOWN — render inside sidebar flow so it doesn't overlap the main content */
+/* --- PROFILE MENU (floating inside sidebar, does NOT push dashboard) --- */
+
+/* ensure sidebar is the positioning context */
+.sidebar {
+  position: relative;
+  overflow: visible;
+}
+
+/* Profile dropdown — TOP RIGHT inside the sidebar */
+.profile-menu {
+  position: absolute;
+  top: 72px;           /* pull it near the top of the sidebar */
+  left: 185px;         /* align to the sidebar's right edge */
+  width: 220px;
+  background: var(--panel);
+
+  /* 🔥 Transparent / frosted dropdown */
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(11,18,32,0.16);
+  padding: 6px 0;
+  z-index: 80;
+
+  transform-origin: top left;
+  transition: transform 160ms cubic-bezier(.2,.9,.3,1), opacity 160ms ease;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* hidden state: fade+slide up and disable pointer events */
+.profile-menu.hidden {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.99);
+  pointer-events: none;
+}
+
+/* menu items */
+.profile-menu-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--muted);
+  display: block;
+  white-space: nowrap;
+}
+.profile-menu-item:hover {
+  background: rgba(0,0,0,0.04);
+  color: var(--text);
+}
+.profile-menu-item.danger { color: var(--danger); }
+
+/* small accessibility/focus cue */
+.profile-btn:focus { outline: 2px solid rgba(140,21,21,0.12); outline-offset: 2px; border-radius: 8px; }
+
+/* responsive: ensure dropdown stays visible on small screens */
+@media (max-width: 980px) {
+  .profile-menu {
+    left: 20px;
+    top: 20px;
+    width: 200px;
+  }
+}
+
+/* nav */
+.menu {
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-top:6px;
+  overflow-y: auto;
+  overflow-x: hidden;   /* ← prevent scrollbar */
+}
+
+.menu-item { padding:10px; border-radius:10px; cursor:pointer; color:var(--muted); display:flex; align-items:center; gap:10px; }
+.menu-item:hover { background: rgba(0,0,0,0.03); color:var(--text); transform: translateX(3px); transition: all .12s ease; }
+.menu-item.active { background: linear-gradient(90deg, rgba(140,21,21,0.12), rgba(239,68,68,0.04)); color:var(--text); }
+
+/* footer area in sidebar */
+.sidebar-footer { margin-top:auto; font-size:13px; color:var(--muted); display:flex; flex-direction:column; gap:8px; }
+.footer-actions { display:flex; gap:8px; }
+
+/* topbar */
+.topbar { height:var(--topbar-height); display:flex; align-items:center; gap:12px; justify-content:space-between; }
+
+/* grid helpers */
+.grid-2col { display:grid; grid-template-columns: 1fr 360px; gap:16px; align-items:start; }
+.grid-kpis { display:flex; gap:12px; }
+.grid-charts { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+/* table */
+.table { width:100%; border-collapse:collapse; }
+.table th, .table td { padding:10px 8px; text-align:left; border-bottom:1px solid rgba(0,0,0,0.04); color:var(--muted); }
+.table tr:hover td { background: rgba(0,0,0,0.02); color:var(--text); }
+
+/* tabs */
+.tabs { display:flex; gap:8px; margin-bottom:12px; }
+.tab { background:transparent; border:none; padding:8px 10px; border-radius:8px; cursor:pointer; color:var(--muted); }
+.tab.active { background: rgba(0,0,0,0.02); color:var(--text); }
+
+/* small responsive */
+@media (max-width:980px){
+  .sidebar { width:100%; padding:12px; display:flex; flex-direction:row; align-items:center; gap:10px; }
+  .menu { display:none; }
+  .profile-menu { right:8px; top:56px; }
+  .grid-2col { grid-template-columns: 1fr; }
+}
+
+
+/* ---------- Dashboard spacing & visibility improvements (override) ---------- */
+/* Put this at the end of components.css (or in a file loaded after it) */
+
+/* Make main area breathe */
+.main {
+  padding: var(--space-md);
+  gap: var(--space-lg);
+  min-width: 0; /* allow grid children to shrink properly */
+}
+
+/* Topbar spacing */
+.topbar {
+  padding: 0 var(--space-md);
+  height: var(--topbar-height);
+  align-items: center;
+  gap: var(--space-md);
+}
+
+/* Make cards clearly visible on both light & dark themes */
+.card {
+  /* prefer explicit panel bg so cards always read as separate boxes */
+  background: var(--panel);
+  /* a subtle border for separation (keeps softness of design) */
+  border: 1px solid rgba(0,0,0,0.05);
+  /* slightly larger padding & radius for air */
+  padding: 18px;
+  border-radius: 14px;
+  /* slightly stronger shadow so cards float above the page */
+  box-shadow: 0 8px 24px rgba(12,12,14,0.06);
+}
+
+/* KPI area — give each KPI room & hierarchy */
+.kpis, .grid-kpis {
+  gap: calc(var(--space-md) - 4px);
+  align-items: flex-start;
+}
+
+.kpi {
+  min-width: 180px;         /* prevents KPI boxes from collapsing */
+  flex: 1 1 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+}
+
+/* KPI number styling (larger, spaced) */
+.kpi .num {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+}
+
+/* Charts grid — add more breathing room */
+.charts, .grid-charts {
+  gap: calc(var(--space-md) + 4px);
+}
+
+/* Data visual containers should have consistent min-height */
+.card > h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* Make the chart cards a bit taller so charts don't look cramped */
+.charts .card, .card.chart {
+  min-height: 220px;
+  padding: 18px;
+}
+
+/* Vitals quick view — ensure items are clearly separated */
+.vitals-scroll > div {
+  margin-bottom: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: none;
+}
+
+/* Right column (aside) spacing and width */
+.right, aside.right {
+  width: 360px;          /* keep original, but explicit so grid works consistently */
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Recent rows & quick action rows — add consistent padding & hover */
+.card.recent .row,
+.card.quick .row {
+  padding: 10px;
+  border-radius: 10px;
+  transition: background .12s ease;
+}
+.card.recent .row:hover { background: rgba(0,0,0,0.02); }
+
+/* Search input & suggestion box spacing */
+.topbar .search input[type="text"],
+.input.search,
+input[type="search"] {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--input-border);
+  min-width: 280px;
+}
+
+/* Suggestions box visual */
+.topbar .search [role="listbox"], /* generic selector for suggestion dropdowns */
+.topbar .search .suggestions {
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 8px 24px rgba(12,12,14,0.06);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Modal & overlay improvements (keeps modal centered and readable) */
+[style*="position: fixed"][style*="z-index: 1000"] > div {
+  padding: 20px;
+  border-radius: 10px;
+}
+
+/* Responsive tweaks */
+@media (max-width: 980px) {
+  .right, aside.right { width: auto; }
+  .kpi { min-width: 120px; }
+  .charts .card { min-height: 180px; }
+}
+
+/* small helper: ensure inputs inside modals and vitals editor are spaced */
+input[type="text"], textarea {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--input-border);
+}
+
+/* Patient Portal UI polish */
+.patient-sidebar {
+  border: 1px solid rgba(140, 21, 21, 0.12);
+  box-shadow: 0 10px 28px rgba(17, 17, 17, 0.08);
+}
+
+.patient-menu-item {
+  padding: 11px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.patient-menu-item.active {
+  background: linear-gradient(90deg, rgba(140, 21, 21, 0.16), rgba(239, 68, 68, 0.06));
+  border: 1px solid rgba(140, 21, 21, 0.18);
+}
+
+.patient-sidebar-footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  padding-top: 12px;
+}
+
+.patient-dashboard-page {
+  display: grid;
+  gap: 14px;
+}
+
+.patient-welcome-card {
+  padding: 18px 20px;
+  border: 1px solid rgba(140, 21, 21, 0.1);
+}
+
+.patient-main-grid,
+.patient-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.patient-dashboard-card {
+  min-height: 210px;
+  display: flex;
+  flex-direction: column;
+}
+
+.patient-card-title {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.patient-next-appt-content {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(140, 21, 21, 0.03);
+}
+
+.patient-empty-state {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(140, 21, 21, 0.25);
+  background: rgba(140, 21, 21, 0.03);
+}
+
+.patient-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.patient-stat-box {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(140, 21, 21, 0.02);
+}
+
+.patient-stat-value {
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.patient-stat-label {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.patient-preview-item {
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.patient-btn-row {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+@media (max-width: 1100px) {
+  .patient-main-grid,
+  .patient-preview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 980px) {
+  .patient-sidebar .menu {
+    display: flex;
+  }
+
+  .patient-sidebar {
+    width: 100%;
+    border-radius: 12px;
+  }
+}
