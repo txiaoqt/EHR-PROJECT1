@@ -1,96 +1,63 @@
 # TUP Clinic EHR - General Use Case Diagram
 
-This general use case diagram is based on a scan of the current React/Vite site, including the staff/admin routes, patient portal routes, kiosk booking flow, Supabase schema, and security/access-control files.
+The diagram below follows the same general style as the sample: actors outside the system boundary, colored oval use cases inside the system, and dashed `<<include>>` links for shared functions.
 
 ```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial","fontSize":"14px","primaryTextColor":"#111","lineColor":"#555"},"flowchart":{"curve":"linear","nodeSpacing":38,"rankSpacing":58,"useMaxWidth":true}}}%%
 flowchart LR
-  Patient["Patient / Student<br/>(Online Patient Portal User)"]
-  KioskUser["Walk-in Patient<br/>(Self-Service Kiosk User)"]
-  Physician["Physician / Dentist"]
+  Patient["Patient / Student<br/>(Online Portal User)"]
+  Walkin["Walk-in Patient<br/>(Kiosk User)"]
+  Doctor["Doctor / Dentist"]
   Nurse["Nurse / Clinic Staff"]
   Admin["Admin / IT"]
-  Clock["System Clock<br/>(Asia/Manila)"]
-  Supabase[("Supabase<br/>Database / Auth / Storage")]
 
   subgraph SYS["TUP Clinic EHR System"]
     direction LR
 
-    subgraph PATIENT_PORTAL["Patient Portal Functions"]
+    subgraph LEFT["Patient and Kiosk Functions"]
       direction TB
-      P1([Register Patient Account])
-      P2([Log In / Log Out])
-      P3([View Patient Dashboard])
-      P4([Book Same-day Appointment])
-      P5([Book Future Appointment])
-      P6([Select Department and Service])
-      P7([View Available Appointment Slots])
-      P8([Receive Queue Number or Reference Code])
-      P9([View Appointment Summary])
-      P10([Send Clinic / Doctor Message])
-      P11([View Encounter Records and Vitals])
-      P12([Update Patient Profile])
-    end
+      P1([Register / Log In])
+      P2([Book Same-day or Future Appointment])
+      P3([View Appointment / Queue Status])
+      P4([Send Message to Clinic / Doctor])
+      P5([View Own Records and Vitals])
+      P6([Update Patient Profile])
 
-    subgraph KIOSK["Self-Service Kiosk Functions"]
-      direction TB
       K1([Enter Student ID and Name])
-      K2([Select Clinic Department])
-      K3([Select Appointment Type])
-      K4([Select Service and Available Slot])
-      K5([Submit Walk-in / Future Booking])
-      K6([Generate Queue Number or Reference])
+      K2([Book Appointment via Kiosk])
+      K3([Generate Queue Number / Reference Slip])
     end
 
-    subgraph STAFF_OPS["Staff Clinical Operations"]
+    subgraph CORE["Shared Scheduling and Security"]
       direction TB
-      S1([View Staff Dashboard])
-      S2([Search Student / Patient])
-      S3([Register or Add Patient])
-      S4([Manage Appointments])
-      S5([Update Appointment Status])
-      S6([Manage Walk-in Queue])
-      S7([Open Patient Profile])
-      S8([Update Patient Medications, Allergies, Notes])
-      S9([Create New Encounter])
-      S10([Record Vitals])
-      S11([Document HPI, Exam, Assessment and Plan])
-      S12([Mark Encounter Complete])
-      S13([Review Encounter History])
-      S14([Reply to Patient Messages])
+      C1([Secure Authentication])
+      C2([Select Department / Service])
+      C3([View Available Slots])
+      C4([Manage Centralized Scheduling])
+      C5([Manage Walk-in Queue])
+      C6([Update Consultation Status])
+      C7([Enforce Role and Clinic-Hours Access])
+      C8([Write Audit Log])
     end
 
-    subgraph REPORTING["Reports, Inventory, and Administration"]
+    subgraph RIGHT["Staff and Admin Functions"]
       direction TB
-      R1([Generate Census Report])
-      R2([Generate Diagnosis Analytics])
-      R3([Generate Visit Trend Analytics])
-      R4([Export CSV / PDF Reports])
-      R5([Export Patient Profile PDF])
-      R6([Export Census Data])
-      I1([View Inventory Stock Levels])
-      I2([Add Inventory Item])
-      I3([Adjust Stock In / Out])
-      I4([Review Inventory Transactions])
-      I5([Receive Low Stock Alerts])
-      I6([Delete Inventory Item])
-      A1([Manage App Settings])
-      A2([Change Account Password])
-      A3([View Own Profile and Activity])
-      A4([Backup All System Data])
-      A5([Manage User Accounts and Roles])
-      A6([View Audit Logs])
-    end
+      D1([View Patient Records])
+      D2([Record Consultation / Encounter])
+      D3([Record Vitals and Clinical Notes])
+      D4([Mark Visit as Completed])
+      D5([Reply to Patient Messages])
+      D6([Generate Reports and Analytics])
 
-    subgraph SECURITY["Shared Security and System Services"]
-      direction TB
-      X1([Secure Authentication])
-      X2([Enforce Portal Surface Rules])
-      X3([Enforce Clinic Hours])
-      X4([Enforce RBAC / ABAC Permissions])
-      X5([Restrict Sensitive Clinical Fields])
-      X6([Verify Password for Destructive / Export Actions])
-      X7([Write Audit Log])
-      X8([Persist and Retrieve EHR Data])
+      N1([Register / Manage Patient Records])
+      N2([Manage Appointments and Queue])
+      N3([Update Patient Profile Notes])
+      N4([Manage Inventory and Stock Logs])
+
+      A1([Manage User Accounts and Roles])
+      A2([Manage System Settings])
+      A3([View Audit Logs])
+      A4([Backup and Export System Data])
     end
   end
 
@@ -99,198 +66,98 @@ flowchart LR
   Patient --- P3
   Patient --- P4
   Patient --- P5
-  Patient --- P9
-  Patient --- P10
-  Patient --- P11
-  Patient --- P12
+  Patient --- P6
 
-  KioskUser --- K1
-  KioskUser --- K2
-  KioskUser --- K3
-  KioskUser --- K4
-  KioskUser --- K5
-  KioskUser --- K6
+  Walkin --- K1
+  Walkin --- K2
+  Walkin --- K3
 
-  Physician --- S1
-  Physician --- S2
-  Physician --- S3
-  Physician --- S4
-  Physician --- S5
-  Physician --- S6
-  Physician --- S7
-  Physician --- S8
-  Physician --- S9
-  Physician --- S10
-  Physician --- S11
-  Physician --- S12
-  Physician --- S13
-  Physician --- S14
-  Physician --- R1
-  Physician --- R2
-  Physician --- R3
-  Physician --- R4
-  Physician --- R5
-  Physician --- R6
-  Physician --- I1
-  Physician --- I2
-  Physician --- I3
-  Physician --- I4
-  Physician --- I5
-  Physician --- I6
-  Physician --- A1
-  Physician --- A2
-  Physician --- A3
-  Physician --- A4
-  Physician --- A6
+  D1 --- Doctor
+  D2 --- Doctor
+  D3 --- Doctor
+  D4 --- Doctor
+  D5 --- Doctor
+  D6 --- Doctor
 
-  Nurse --- S1
-  Nurse --- S2
-  Nurse --- S3
-  Nurse --- S4
-  Nurse --- S5
-  Nurse --- S6
-  Nurse --- S7
-  Nurse --- S8
-  Nurse --- S9
-  Nurse --- S10
-  Nurse --- S13
-  Nurse --- R1
-  Nurse --- R2
-  Nurse --- R3
-  Nurse --- I1
-  Nurse --- I2
-  Nurse --- I3
-  Nurse --- I4
-  Nurse --- I5
-  Nurse --- A2
-  Nurse --- A3
+  N1 --- Nurse
+  N2 --- Nurse
+  N3 --- Nurse
+  N4 --- Nurse
+  D3 --- Nurse
+  D6 --- Nurse
 
-  Admin --- S1
-  Admin --- S2
-  Admin --- S3
-  Admin --- S4
-  Admin --- S5
-  Admin --- S6
-  Admin --- S7
-  Admin --- S8
-  Admin --- S9
-  Admin --- S10
-  Admin --- S11
-  Admin --- S12
-  Admin --- S13
-  Admin --- R1
-  Admin --- R2
-  Admin --- R3
-  Admin --- R4
-  Admin --- R5
-  Admin --- R6
-  Admin --- I1
-  Admin --- I2
-  Admin --- I3
-  Admin --- I4
-  Admin --- I5
-  Admin --- I6
-  Admin --- A1
-  Admin --- A2
-  Admin --- A3
-  Admin --- A4
-  Admin --- A5
-  Admin --- A6
+  A1 --- Admin
+  A2 --- Admin
+  A3 --- Admin
+  A4 --- Admin
+  D6 --- Admin
+  N4 --- Admin
 
-  P1 -. "include" .-> X1
-  P2 -. "include" .-> X1
-  P2 -. "include" .-> X2
-  P3 -. "include" .-> X8
-  P4 -. "include" .-> P6
-  P4 -. "include" .-> P7
-  P4 -. "include" .-> P8
-  P5 -. "include" .-> P6
-  P5 -. "include" .-> P7
-  P5 -. "include" .-> P8
-  P10 -. "include" .-> X8
-  P11 -. "include" .-> X8
-  P12 -. "include" .-> X8
+  P1 -. "<<include>>" .-> C1
+  P2 -. "<<include>>" .-> C2
+  P2 -. "<<include>>" .-> C3
+  P2 -. "<<include>>" .-> C4
+  P3 -. "<<include>>" .-> C5
+  P4 -. "<<include>>" .-> C8
+  P5 -. "<<include>>" .-> C7
+  P6 -. "<<include>>" .-> C8
 
-  K5 -. "include" .-> K1
-  K5 -. "include" .-> K2
-  K5 -. "include" .-> K3
-  K5 -. "include" .-> K4
-  K5 -. "include" .-> K6
-  K5 -. "include" .-> X8
+  K2 -. "<<include>>" .-> C2
+  K2 -. "<<include>>" .-> C3
+  K2 -. "<<include>>" .-> C4
+  K3 -. "<<include>>" .-> C5
 
-  S1 -. "include" .-> X3
-  S1 -. "include" .-> X8
-  S3 -. "include" .-> S2
-  S3 -. "include" .-> X7
-  S4 -. "include" .-> X4
-  S4 -. "include" .-> X8
-  S5 -. "include" .-> X7
-  S6 -. "include" .-> S5
-  S7 -. "include" .-> X4
-  S8 -. "include" .-> X7
-  S9 -. "include" .-> S2
-  S9 -. "include" .-> S10
-  S9 -. "include" .-> S11
-  S9 -. "include" .-> X7
-  S11 -. "include" .-> X5
-  S12 -. "include" .-> X7
-  S13 -. "include" .-> X5
-  S14 -. "include" .-> X8
+  D1 -. "<<include>>" .-> C7
+  D2 -. "<<include>>" .-> D3
+  D2 -. "<<include>>" .-> C8
+  D4 -. "<<include>>" .-> C6
+  D5 -. "<<include>>" .-> C8
+  D6 -. "<<include>>" .-> C7
 
-  R1 -. "include" .-> X8
-  R2 -. "include" .-> X8
-  R3 -. "include" .-> X8
-  R4 -. "include" .-> X6
-  R5 -. "include" .-> X6
-  R6 -. "include" .-> X6
-  I2 -. "include" .-> X7
-  I3 -. "include" .-> X7
-  I6 -. "include" .-> X6
-  I6 -. "include" .-> X7
-  A1 -. "include" .-> X8
-  A4 -. "include" .-> X6
-  A4 -. "include" .-> X8
-  A5 -. "include" .-> X4
-  A6 -. "include" .-> X8
+  N1 -. "<<include>>" .-> C8
+  N2 -. "<<include>>" .-> C4
+  N2 -. "<<include>>" .-> C5
+  N2 -. "<<include>>" .-> C6
+  N3 -. "<<include>>" .-> C8
+  N4 -. "<<include>>" .-> C8
 
-  X3 --- Clock
-  X8 --- Supabase
-  X1 --- Supabase
-  X4 --- Supabase
-  X7 --- Supabase
+  A1 -. "<<include>>" .-> C7
+  A2 -. "<<include>>" .-> C8
+  A3 -. "<<include>>" .-> C8
+  A4 -. "<<include>>" .-> C7
 
-  classDef actor fill:#ffffff,stroke:#222,color:#111,stroke-width:2px;
-  classDef patientUC fill:#e8f5e9,stroke:#2e7d32,color:#103b18;
-  classDef kioskUC fill:#e3f2fd,stroke:#1565c0,color:#0b305f;
-  classDef staffUC fill:#fff3e0,stroke:#ef6c00,color:#4a2600;
-  classDef reportUC fill:#fce4ec,stroke:#ad1457,color:#4a0a24;
-  classDef securityUC fill:#f5f5f5,stroke:#616161,color:#222;
-  classDef external fill:#f7f7ff,stroke:#4a4a8a,color:#111;
+  classDef actor fill:#fff,stroke:#111,stroke-width:2px,color:#111;
+  classDef patient fill:#e8f5e9,stroke:#2e7d32,stroke-width:1.5px,color:#102a14;
+  classDef kiosk fill:#e3f2fd,stroke:#1565c0,stroke-width:1.5px,color:#0b2c55;
+  classDef core fill:#f5f5f5,stroke:#616161,stroke-width:1.5px,color:#222;
+  classDef doctor fill:#ffebee,stroke:#b71c1c,stroke-width:1.5px,color:#4a0808;
+  classDef nurse fill:#fff8e1,stroke:#b8860b,stroke-width:1.5px,color:#4b3500;
+  classDef admin fill:#f3e5f5,stroke:#6a1b9a,stroke-width:1.5px,color:#2d0b3f;
 
-  class Patient,KioskUser,Physician,Nurse,Admin actor;
-  class Clock,Supabase external;
-  class P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11,P12 patientUC;
-  class K1,K2,K3,K4,K5,K6 kioskUC;
-  class S1,S2,S3,S4,S5,S6,S7,S8,S9,S10,S11,S12,S13,S14 staffUC;
-  class R1,R2,R3,R4,R5,R6,I1,I2,I3,I4,I5,I6,A1,A2,A3,A4,A5,A6 reportUC;
-  class X1,X2,X3,X4,X5,X6,X7,X8 securityUC;
+  class Patient,Walkin,Doctor,Nurse,Admin actor;
+  class P1,P2,P3,P4,P5,P6 patient;
+  class K1,K2,K3 kiosk;
+  class C1,C2,C3,C4,C5,C6,C7,C8 core;
+  class D1,D2,D3,D4,D5,D6 doctor;
+  class N1,N2,N3,N4 nurse;
+  class A1,A2,A3,A4 admin;
 ```
 
-## Legend
+**Legend**
 
-- Solid line: actor participates in the use case.
-- Dotted line: included/shared behavior used by another use case.
-- Green: patient portal functions.
-- Blue: self-service kiosk functions.
-- Orange: clinic staff clinical operations.
-- Pink: reporting, inventory, settings, backup, and admin functions.
-- Gray: shared authentication, access control, clinic-hours, audit, and database services.
+| Color | Meaning |
+|---|---|
+| Green | Patient portal functions |
+| Blue | Self-service kiosk functions |
+| Red | Doctor / dentist functions |
+| Yellow | Nurse / clinic staff functions |
+| Purple | Admin / IT functions |
+| Gray | Shared scheduling, security, audit, and access-control services |
 
-## Scope Notes
+**Scope Notes**
 
-- Staff portal routes are protected for `admin`, `physician`, and `nurse` roles.
-- Patient portal routes are protected for the `patient` role and are deployed separately with `VITE_DEPLOY_SURFACE=user`.
-- The kiosk booking route is public on the user surface and stores appointments with `source = kiosk`.
-- Staff/admin access is limited to clinic hours, 07:00 to 19:00 in the Asia/Manila timezone.
-- Sensitive actions such as destructive deletes, report exports, census exports, patient PDF exports, and full backups require elevated permission and/or password verification.
-- Nurse access is restricted for physician-only clinical fields such as `assessment_plan`, especially on high-sensitivity records.
+- Patient portal includes sign-up/login, appointment booking, messages, own records, and profile updates.
+- Kiosk booking supports walk-in users who enter student details, choose service/schedule, and receive a queue number or reference.
+- Staff portal includes patient management, appointments, encounters, queue/status updates, reports, inventory, settings, profile/activity, and backups.
+- Access control is based on app roles: `patient`, `nurse`, `physician`, and `admin`.
+- Staff access is guarded by clinic hours: 07:00 to 19:00, Asia/Manila.
