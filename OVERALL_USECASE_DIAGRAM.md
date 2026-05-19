@@ -1,123 +1,116 @@
 # TUP Clinic EHR - General Use Case Diagram
 
-This version follows the sample format: stickman actors, one system boundary, oval use cases, and `<<include>>` relationships. Monochrome only (no colors).
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"primaryTextColor":"#111","lineColor":"#444","fontFamily":"Arial"},"flowchart":{"curve":"linear","nodeSpacing":38,"rankSpacing":48}}}%%
+flowchart LR
 
-```plantuml
-@startuml
-left to right direction
-skinparam monochrome true
-skinparam shadowing false
-skinparam packageStyle rectangle
-skinparam actorStyle stickman
+  PAT["O<br/>/|\\<br/>/ \\<br/>Patient / Student<br/>(Online Patient Portal User)"]
+  WLK["O<br/>/|\\<br/>/ \\<br/>Walk-in Patient<br/>(Self-Service Kiosk User)"]
+  DOC["O<br/>/|\\<br/>/ \\<br/>Doctor / Dentist"]
+  NUR["O<br/>/|\\<br/>/ \\<br/>Nurse / Clinic Staff"]
+  ADM["O<br/>/|\\<br/>/ \\<br/>Admin / IT"]
 
-title TUP Clinic EHR: Electronic Health Records System
+  subgraph SYS["TUP Clinic EHR System"]
+    direction LR
 
-actor "Patient / Student\n(Online Patient Portal User)" as PAT
-actor "Walk-in Patient\n(Self-Service Kiosk User)" as WLK
-actor "Doctor / Dentist" as DOC
-actor "Nurse / Clinic Staff" as NUR
-actor "Admin / IT" as ADM
+    subgraph LEFT[" "]
+      direction TB
+      P1([Register / Login])
+      P2([Browse Clinics and Services])
+      P3([Book Same-day or Future Appointment])
+      P4([View Appointment / Queue Status])
+      P5([View Own Records and Vitals])
+      P6([Send Follow-up Clinic Messages])
+      K1([Enter Student ID / QR Verification])
+      K2([Select Department / Service via Kiosk])
+      K3([Book Same-day Appointment via Kiosk])
+      K4([Generate Queue Number / Reference Slip])
+    end
 
-rectangle "TUP Clinic EHR System" {
+    subgraph MID[" "]
+      direction TB
+      C1([Secure Authentication])
+      C2([Select Department / Service])
+      C3([View Available Slots])
+      C4([Manage Centralized Appointment Scheduling])
+      C5([Manage Walk-in Queue])
+      C6([Update Consultation Status])
+      C7([View Appointment / Queue Status])
+    end
 
-  (Register / Login\n(Online Patient Portal)) as P1
-  (Browse Clinics and\nAvailable Services) as P2
-  (Book Same-day or\nFuture Appointment) as P3
-  (View Appointment /\nQueue Status) as P4
-  (View Own Records\nand Vitals) as P5
-  (Send Follow-up\nClinic Messages) as P6
+    subgraph RIGHT[" "]
+      direction TB
+      D1([View Patient Records])
+      D2([Record Consultation / Encounter])
+      D3([Mark Visit as Completed])
+      D4([Manage Appointments and Scheduling])
+      D5([Reply to Patient Messages])
+      D6([Generate Reports and Analytics])
+      N1([Manage Patient Records])
+      N2([Manage Walk-in Queue])
+      N3([Update Consultation Status])
+      N4([Manage Inventory])
+      A1([Manage User Accounts and Roles])
+      A2([Manage System Settings])
+      A3([View Audit Logs])
+      A4([Backup and Recovery])
+    end
+  end
 
-  (Enter Student ID /\nQR Verification) as K1
-  (Select Department /\nService via Kiosk) as K2
-  (Book Same-day\nAppointment via Kiosk) as K3
-  (Generate Queue Number /\nReference Slip) as K4
+  PAT --- P1
+  PAT --- P2
+  PAT --- P3
+  PAT --- P4
+  PAT --- P5
+  PAT --- P6
 
-  (Secure Authentication) as C1
-  (Select Department /\nService) as C2
-  (View Available Slots) as C3
-  (Manage Centralized\nAppointment Scheduling) as C4
-  (Manage Walk-in Queue) as C5
-  (Update Consultation\nStatus) as C6
-  (Enforce Role / Clinic-Hours\nAccess Rules) as C7
-  (Write Audit Log) as C8
+  WLK --- K1
+  WLK --- K2
+  WLK --- K3
+  WLK --- K4
 
-  (View Patient Records) as D1
-  (Record Consultation /\nEncounter) as D2
-  (Mark Visit as Completed) as D3
-  (Manage Appointments\nand Queue) as D4
-  (Reply to Patient Messages) as D5
-  (Generate Reports\nand Analytics) as D6
+  DOC --- D1
+  DOC --- D2
+  DOC --- D3
+  DOC --- D4
+  DOC --- D5
+  DOC --- D6
 
-  (Manage Patient Records) as N1
-  (Manage Walk-in Queue) as N2
-  (Update Patient Profile\nNotes) as N3
-  (Manage Inventory) as N4
+  NUR --- N1
+  NUR --- N2
+  NUR --- N3
+  NUR --- N4
+  NUR --- D5
+  NUR --- D6
 
-  (Manage User Accounts\nand Roles) as A1
-  (Manage System Settings) as A2
-  (View Audit Logs) as A3
-  (Backup and Export\nSystem Data) as A4
-}
+  ADM --- A1
+  ADM --- A2
+  ADM --- A3
+  ADM --- A4
 
-PAT -- P1
-PAT -- P2
-PAT -- P3
-PAT -- P4
-PAT -- P5
-PAT -- P6
+  P1 -. "<<include>>" .-> C1
+  P3 -. "<<include>>" .-> C2
+  P3 -. "<<include>>" .-> C3
+  P3 -. "<<include>>" .-> C4
+  P4 -. "<<include>>" .-> C7
 
-WLK -- K1
-WLK -- K2
-WLK -- K3
-WLK -- K4
+  K2 -. "<<include>>" .-> C2
+  K3 -. "<<include>>" .-> C4
+  K4 -. "<<include>>" .-> C5
 
-DOC -- D1
-DOC -- D2
-DOC -- D3
-DOC -- D4
-DOC -- D5
-DOC -- D6
+  D4 -. "<<include>>" .-> C4
+  D3 -. "<<include>>" .-> C6
+  N2 -. "<<include>>" .-> C5
+  N3 -. "<<include>>" .-> C6
+  A3 -. "<<include>>" .-> C7
 
-NUR -- N1
-NUR -- N2
-NUR -- N3
-NUR -- N4
-NUR -- D5
-NUR -- D6
+  classDef actor fill:transparent,stroke:transparent,color:#111,font-size:13px;
+  classDef usecase fill:#fff,stroke:#444,color:#111,stroke-width:1.2px;
+  classDef box fill:#fff,stroke:#444,color:#111,stroke-width:1px;
 
-ADM -- A1
-ADM -- A2
-ADM -- A3
-ADM -- A4
-
-P1 .> C1 : <<include>>
-P3 .> C2 : <<include>>
-P3 .> C3 : <<include>>
-P3 .> C4 : <<include>>
-P4 .> C5 : <<include>>
-P6 .> C8 : <<include>>
-
-K2 .> C2 : <<include>>
-K3 .> C4 : <<include>>
-K4 .> C5 : <<include>>
-
-D2 .> C8 : <<include>>
-D3 .> C6 : <<include>>
-D4 .> C4 : <<include>>
-D5 .> C8 : <<include>>
-D6 .> C7 : <<include>>
-
-N1 .> C7 : <<include>>
-N2 .> C5 : <<include>>
-N3 .> C8 : <<include>>
-N4 .> C8 : <<include>>
-
-A1 .> C7 : <<include>>
-A2 .> C8 : <<include>>
-A3 .> C8 : <<include>>
-A4 .> C7 : <<include>>
-
-@enduml
+  class PAT,WLK,DOC,NUR,ADM actor;
+  class P1,P2,P3,P4,P5,P6,K1,K2,K3,K4,C1,C2,C3,C4,C5,C6,C7,D1,D2,D3,D4,D5,D6,N1,N2,N3,N4,A1,A2,A3,A4 usecase;
+  class SYS,LEFT,MID,RIGHT box;
 ```
 
 Figure: General Use Case Diagram of the TUP Clinic EHR System
