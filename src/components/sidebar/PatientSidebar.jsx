@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../AuthContext.jsx';
 import tupehrlogo from '../../assets/images/tupehrlogo.jpg';
@@ -90,7 +91,7 @@ const PatientSidebar = () => {
         </div>
       </aside>
 
-      {showConfirm && (
+      {showConfirm && createPortal((
         <div style={{
           position: 'fixed',
           inset: 0,
@@ -116,7 +117,7 @@ const PatientSidebar = () => {
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
     </>
   );
 };

@@ -19,6 +19,7 @@ const PatientRecords = () => {
         .from('encounters')
         .select('id, encounter_date, clinician_name, chief_complaint, assessment_plan, vitals, status')
         .eq('patient_id', user.patient_id)
+        .eq('status', 'Completed')
         .order('encounter_date', { ascending: false });
       if (!mounted) return;
       setRecords(data || []);
@@ -30,7 +31,7 @@ const PatientRecords = () => {
 
   return (
     <main className="main">
-      <section className="page">
+      <section className="page patient-dashboard-page">
         <div className="card" style={{ marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Records</h2>
           <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 13 }}>
@@ -38,8 +39,9 @@ const PatientRecords = () => {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card patient-records-card">
           <h3 style={{ marginTop: 0 }}>Encounter History</h3>
+          <div className="table-responsive">
           <table className="table">
             <thead>
               <tr>
@@ -66,6 +68,7 @@ const PatientRecords = () => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </section>
     </main>

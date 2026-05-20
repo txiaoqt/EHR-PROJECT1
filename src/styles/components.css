@@ -13,7 +13,7 @@
 .btn {
   display:inline-flex; align-items:center; gap:8px;
   background: linear-gradient(90deg, var(--accent), var(--danger));
-  color: white; border: none; padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight:600;
+  color: white; border: none; padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight:600; min-height: 42px;
 }
 .btn.secondary {
   background: transparent; color: var(--muted); border: 1px solid rgba(0,0,0,0.06);
@@ -53,7 +53,7 @@
 
 /* inputs */
 .input, input[type="text"], input[type="search"], input[type="date"], textarea, select {
-  padding:10px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:transparent; color:var(--text);
+  padding:10px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:transparent; color:var(--text); min-height: 42px;
 }
 .input::placeholder, input::placeholder, textarea::placeholder { color: var(--muted); }
 
@@ -122,6 +122,9 @@ input.search {
   justify-content: space-between;
 }
 .brand { display:flex; align-items:center; gap:12px; }
+.brand { min-width: 0; }
+.brand > div:last-child { min-width: 0; }
+.brand-title, .brand-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .logo { width:44px; height:44px; border-radius:10px; background: linear-gradient(135deg, var(--accent-3), var(--accent)); display:flex; align-items:center; justify-content:center; color:white; font-weight:700; }
 
 /* profile button (top-right) */
@@ -225,6 +228,12 @@ input.search {
 .table th, .table td { padding:10px 8px; text-align:left; border-bottom:1px solid rgba(0,0,0,0.04); color:var(--muted); }
 .table tr:hover td { background: rgba(0,0,0,0.02); color:var(--text); }
 
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* tabs */
 .tabs { display:flex; gap:8px; margin-bottom:12px; }
 .tab { background:transparent; border:none; padding:8px 10px; border-radius:8px; cursor:pointer; color:var(--muted); }
@@ -232,8 +241,17 @@ input.search {
 
 /* small responsive */
 @media (max-width:980px){
-  .sidebar { width:100%; padding:12px; display:flex; flex-direction:row; align-items:center; gap:10px; }
-  .menu { display:none; }
+  .sidebar {
+    width: min(86vw, var(--sidebar-width)) !important;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    background: var(--panel);
+    border-radius: 0 14px 14px 0;
+  }
+  .menu { display:flex; }
   .profile-menu { right:8px; top:56px; }
   .grid-2col { grid-template-columns: 1fr; }
 }
@@ -487,6 +505,88 @@ input[type="text"], textarea {
   padding-top: 12px;
 }
 
+.booking-flow-card {
+  min-height: 0;
+}
+
+.booking-two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.booking-day-btn {
+  min-height: 64px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.booking-day-empty {
+  min-height: 64px;
+}
+
+.booking-slot-table .btn.secondary {
+  min-height: 40px;
+}
+
+.patient-msg-card,
+.patient-records-card,
+.patient-profile-card {
+  min-width: 0;
+}
+
+.patient-msg-thread-row {
+  overflow-wrap: anywhere;
+}
+
+.patient-profile-header-row {
+  gap: 10px;
+}
+
+.patient-profile-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.patient-profile-grid label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mobile-nav-toggle {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1200;
+  border: 1px solid rgba(140, 21, 21, 0.22);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 10px;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.mobile-nav-toggle:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(140, 21, 21, 0.16), 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.mobile-nav-toggle.open {
+  left: calc(min(86vw, var(--sidebar-width)) + 8px);
+}
+
+.mobile-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  background: rgba(0, 0, 0, 0.35);
+  border: none;
+}
+
 @media (max-width: 1100px) {
   .patient-main-grid,
   .patient-preview-grid {
@@ -495,12 +595,72 @@ input[type="text"], textarea {
 }
 
 @media (max-width: 980px) {
-  .patient-sidebar .menu {
-    display: flex;
+  .mobile-nav-toggle { display: inline-flex; align-items: center; justify-content: center; }
+  .mobile-sidebar-backdrop { display: block; }
+  .menu { display: flex; }
+  .sidebar {
+    padding: 14px;
+    gap: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    width: min(86vw, var(--sidebar-width)) !important;
+    border-radius: 0 14px 14px 0;
   }
+  .card { padding: 14px; border-radius: 12px; }
+  .btn { width: 100%; justify-content: center; }
+  .patient-btn-row .btn { width: auto; }
+  .topbar { flex-wrap: wrap; height: auto; gap: 8px; }
+  .topbar .search input[type="text"],
+  .input.search,
+  input[type="search"] { min-width: 0; width: 100%; }
+  [style*="position: fixed"][style*="z-index: 1000"] > div,
+  [style*="position: fixed"][style*="z-index: 3000"] > div {
+    width: min(94vw, 520px) !important;
+    max-width: 94vw !important;
+  }
+  .main {
+    padding-top: 56px !important;
+  }
+  .page {
+    padding-top: 12px !important;
+  }
+}
 
-  .patient-sidebar {
-    width: 100%;
-    border-radius: 12px;
-  }
+@media (max-width: 768px) {
+  .grid-2col,
+  .grid-charts,
+  .patient-main-grid,
+  .patient-preview-grid,
+  .patient-summary-grid { grid-template-columns: 1fr !important; }
+  .tabs { overflow-x: auto; white-space: nowrap; }
+  .table { min-width: 680px; }
+  .main { padding: 10px; }
+  .booking-two-col { grid-template-columns: 1fr !important; }
+  .booking-calendar-wrap { padding: 10px !important; }
+  .booking-weekdays { gap: 4px !important; }
+  .booking-weekdays > div { font-size: 12px; padding: 4px !important; }
+  .booking-calendar-grid { gap: 4px !important; }
+  .booking-day-btn,
+  .booking-day-empty { min-height: 56px !important; height: 56px !important; }
+  .booking-day-btn div { font-size: 12px; }
+  .booking-slot-table { font-size: 13px; }
+  .booking-slot-table > div > div { padding: 8px !important; }
+  .patient-msg-grid { grid-template-columns: 1fr !important; }
+  .patient-profile-header-row { flex-direction: column; align-items: flex-start !important; }
+  .patient-profile-actions { width: 100%; justify-content: flex-start; }
+  .patient-profile-actions .btn { width: auto; }
+  .patient-records-card .table,
+  .patient-msg-card .table { min-width: 620px; }
+}
+
+@media (max-width: 425px) {
+  .btn.small { min-height: 38px; }
+  .card > h3 { font-size: 15px; }
+  .patient-stat-value { font-size: 20px; }
+  .booking-weekdays > div { font-size: 11px; }
+  .booking-day-btn,
+  .booking-day-empty { min-height: 50px !important; height: 50px !important; }
+  .patient-profile-actions .btn { width: 100%; }
+  .patient-msg-card .table,
+  .patient-records-card .table { min-width: 560px; }
 }

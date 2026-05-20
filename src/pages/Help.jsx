@@ -156,7 +156,7 @@ const Help = () => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             gap: '32px',
             alignItems: 'flex-start'
           }}
@@ -272,7 +272,7 @@ const Help = () => {
                 Chat access is restricted to physicians only.
               </div>
             ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 300px) minmax(0, 1fr)', gap: 12 }}>
               <div style={{ border: '1px solid rgba(0,0,0,0.06)', borderRadius: 8, maxHeight: 360, overflowY: 'auto' }}>
                 {threads.length === 0 ? (
                   <div style={{ padding: 10, color: 'var(--muted)' }}>No patient messages.</div>

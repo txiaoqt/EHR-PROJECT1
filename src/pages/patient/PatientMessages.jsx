@@ -9,6 +9,7 @@ const PatientMessages = () => {
   const [form, setForm] = useState({ recipient_name: '', concern_type: 'General clinic inquiry', message_text: '' });
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState('');
+  const [noticeOpen, setNoticeOpen] = useState(false);
 
   const loadData = async () => {
     if (!user?.patient_id) return;
@@ -32,6 +33,10 @@ const PatientMessages = () => {
   useEffect(() => {
     loadData();
   }, [user?.patient_id]);
+
+  useEffect(() => {
+    if (notice) setNoticeOpen(true);
+  }, [notice]);
 
   const grouped = useMemo(() => {
     const map = new Map();
@@ -73,7 +78,7 @@ const PatientMessages = () => {
 
   return (
     <main className="main">
-      <section className="page">
+      <section className="page patient-dashboard-page">
         <div className="card" style={{ marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Messages</h2>
           <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 13 }}>
@@ -81,8 +86,8 @@ const PatientMessages = () => {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="card">
+        <div className="patient-main-grid patient-msg-grid">
+          <div className="card patient-msg-card">
             <h3 style={{ marginTop: 0 }}>New Message</h3>
             <select className="input" value={form.recipient_name} onChange={(e) => setForm((p) => ({ ...p, recipient_name: e.target.value }))}>
               <option value="">Clinic (General)</option>
@@ -102,19 +107,18 @@ const PatientMessages = () => {
               value={form.message_text}
               onChange={(e) => setForm((p) => ({ ...p, message_text: e.target.value }))}
             />
-            <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div className="patient-btn-row">
               <button className="btn" onClick={send} disabled={sending}>{sending ? 'Sending...' : 'Send'}</button>
-              <span style={{ color: notice.includes('Unable') ? 'var(--danger)' : 'var(--muted)' }}>{notice}</span>
             </div>
           </div>
 
-          <div className="card">
+          <div className="card patient-msg-card">
             <h3 style={{ marginTop: 0 }}>Conversations</h3>
             {grouped.length === 0 ? (
               <div style={{ color: 'var(--muted)' }}>No messages yet.</div>
             ) : (
               grouped.map(([thread, rows]) => (
-                <div key={thread} style={{ padding: 10, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                <div key={thread} className="patient-msg-thread-row" style={{ padding: 10, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                   <div style={{ fontWeight: 700 }}>{thread}</div>
                   <div style={{ color: 'var(--muted)', fontSize: 12 }}>{rows.length} message(s)</div>
                 </div>
@@ -123,8 +127,9 @@ const PatientMessages = () => {
           </div>
         </div>
 
-        <div className="card" style={{ marginTop: 12 }}>
+        <div className="card patient-msg-card" style={{ marginTop: 12 }}>
           <h3 style={{ marginTop: 0 }}>Message History</h3>
+          <div className="table-responsive">
           <table className="table">
             <thead>
               <tr>
@@ -149,7 +154,25 @@ const PatientMessages = () => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
+        {noticeOpen && (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3200, padding: 14 }}
+            onClick={() => setNoticeOpen(false)}
+          >
+            <div
+              style={{ width: 'min(92vw, 520px)', background: 'var(--panel)', borderRadius: 12, border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 18px 38px rgba(0,0,0,0.18)', padding: 18 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Message Notice</div>
+              <div style={{ color: notice.toLowerCase().includes('unable') ? 'var(--danger)' : 'var(--text)', lineHeight: 1.45 }}>{notice}</div>
+              <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn secondary" onClick={() => setNoticeOpen(false)}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     </main>
   );

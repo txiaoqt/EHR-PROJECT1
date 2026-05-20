@@ -17,6 +17,11 @@ const toDateKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.ge
 const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
 const endOfMonth = (d) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
 const addMonths = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, 1);
+const addDays = (d, n) => {
+  const copy = new Date(d);
+  copy.setDate(copy.getDate() + n);
+  return copy;
+};
 const formatLongDate = (key) => {
   const d = new Date(`${key}T00:00:00`);
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -33,6 +38,7 @@ const AppointmentBookingFlow = ({ source = 'portal', kioskMode = false }) => {
   const [appointments, setAppointments] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [notice, setNotice] = useState('');
+  const [noticeOpen, setNoticeOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [viewMonth, setViewMonth] = useState(startOfMonth(new Date()));
   const [form, setForm] = useState({
@@ -153,6 +159,45 @@ const AppointmentBookingFlow = ({ source = 'portal', kioskMode = false }) => {
     });
   }, [appointments, form.appointment_date, form.department]);
 
+  const sameDayHasAvailableSlot = useMemo(() => {
+    return SLOT_TIMES.some((time) => {
+      const slotBookedCount = appointments.filter((a) =>
+        a.appointment_date === today &&
+        a.department === form.department &&
+        (a.appointment_time || '') === time &&
+        a.status !== 'Cancelled',
+      ).length;
+      return slotBookedCount < SLOT_CAPACITY;
+    });
+  }, [appointments, form.department, today]);
+
+  const nextAvailableFutureDate = useMemo(() => {
+    for (let i = 1; i <= 30; i += 1) {
+      const dateKey = toDateKey(addDays(new Date(), i));
+      const dayBookedCount = appointments.filter((a) =>
+        a.appointment_date === dateKey &&
+        a.department === form.department &&
+        a.status !== 'Cancelled',
+      ).length;
+      if (dayBookedCount < DAILY_PATIENT_LIMIT) return dateKey;
+    }
+    return '';
+  }, [appointments, form.department]);
+
+  useEffect(() => {
+    if (form.appointment_type === 'Same-day Appointment' && !sameDayHasAvailableSlot) {
+      setForm((p) => ({
+        ...p,
+        appointment_type: 'Future Appointment',
+        appointment_date: nextAvailableFutureDate || p.appointment_date,
+        appointment_time: '',
+      }));
+      setNotice(nextAvailableFutureDate
+        ? `Same-day slots are full. Switched to future booking (${nextAvailableFutureDate}).`
+        : 'Same-day slots are full. Please choose a future date.');
+    }
+  }, [form.appointment_type, sameDayHasAvailableSlot, nextAvailableFutureDate]);
+
   const slotRows = useMemo(() => {
     const dailyBookedCount = appointments.filter((a) =>
       a.appointment_date === form.appointment_date &&
@@ -253,9 +298,13 @@ const AppointmentBookingFlow = ({ source = 'portal', kioskMode = false }) => {
     }
   };
 
+  useEffect(() => {
+    if (notice) setNoticeOpen(true);
+  }, [notice]);
+
   return (
     <main className="main">
-      <section className="page">
+      <section className="page patient-dashboard-page">
         <div className="card" style={{ marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>{kioskMode ? 'Clinic Kiosk Booking' : 'Appointment Booking'}</h2>
           <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 13 }}>
@@ -263,9 +312,9 @@ const AppointmentBookingFlow = ({ source = 'portal', kioskMode = false }) => {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card patient-dashboard-card booking-flow-card">
           <div style={{ display: 'grid', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="patient-summary-grid booking-two-col">
               {['Medical Clinic', 'Dental Clinic'].map((dept) => {
                 const active = form.department === dept;
                 return (
@@ -282,37 +331,44 @@ const AppointmentBookingFlow = ({ source = 'portal', kioskMode = false }) => {
               })}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="patient-summary-grid booking-two-col">
               {['Same-day Appointment', 'Future Appointment'].map((kind) => {
                 const active = form.appointment_type === kind;
+                const disabled = kind === 'Same-day Appointment' && !sameDayHasAvailableSlot;
                 return (
                   <button
                     key={kind}
                     type="button"
                     className="btn secondary"
+                    disabled={disabled}
                     onClick={() => setForm((p) => ({ ...p, appointment_type: kind }))}
-                    style={{ justifyContent: 'center', padding: 14, borderRadius: 8, background: active ? 'rgba(140,21,21,0.12)' : 'transparent', color: active ? 'var(--text)' : 'var(--muted)' }}
+                    style={{ justifyContent: 'center', padding: 14, borderRadius: 8, background: active ? 'rgba(140,21,21,0.12)' : 'transparent', color: active ? 'var(--text)' : 'var(--muted)', opacity: disabled ? 0.5 : 1 }}
                   >
                     {kind}
                   </button>
                 );
               })}
             </div>
+            {!sameDayHasAvailableSlot && (
+              <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+                Same-day slots are currently full for {form.department}. Please choose a future appointment date.
+              </div>
+            )}
 
-            <div style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, padding: 12 }}>
+            <div className="booking-calendar-wrap" style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, padding: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <button className="btn secondary small" type="button" onClick={() => setViewMonth((m) => addMonths(m, -1))}>{'<'}</button>
                 <strong style={{ fontSize: 18 }}>{MONTHS[viewMonth.getMonth()]} {viewMonth.getFullYear()}</strong>
                 <button className="btn secondary small" type="button" onClick={() => setViewMonth((m) => addMonths(m, 1))}>{'>'}</button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 6 }}>
+              <div className="booking-weekdays" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, marginBottom: 6 }}>
                 {DAYS_SHORT.map((day, i) => (
                   <div key={day} style={{ textAlign: 'center', padding: 6, fontWeight: 700, color: i === selectedWeekDay ? 'var(--accent)' : 'var(--muted)' }}>{day}</div>
                 ))}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+              <div className="booking-calendar-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
                 {calendarCells.map((cell, idx) => {
-                  if (!cell) return <div key={`empty-${idx}`} style={{ height: 60, border: '1px solid rgba(0,0,0,0.05)', borderRadius: 6 }} />;
+                  if (!cell) return <div key={`empty-${idx}`} className="booking-day-empty" style={{ height: 60, border: '1px solid rgba(0,0,0,0.05)', borderRadius: 6 }} />;
                   const key = toDateKey(cell);
                   const selected = key === form.appointment_date;
                   const selectable = isDateSelectable(key);
@@ -321,6 +377,7 @@ const AppointmentBookingFlow = ({ source = 'portal', kioskMode = false }) => {
                     <button
                       key={key}
                       type="button"
+                      className="booking-day-btn"
                       disabled={!selectable}
                       onClick={() => {
                         setForm((p) => ({ ...p, appointment_date: key, appointment_time: '' }));
@@ -344,7 +401,7 @@ const AppointmentBookingFlow = ({ source = 'portal', kioskMode = false }) => {
               </div>
             </div>
 
-            <div style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, overflow: 'hidden' }}>
+            <div className="table-responsive booking-slot-table" style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, overflow: 'hidden' }}>
               <div style={{ padding: 10, fontWeight: 700, textAlign: 'center' }}>{formatLongDate(form.appointment_date)}</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: 'rgba(0,0,0,0.03)', fontWeight: 700 }}>
                 <div style={{ padding: 10, borderRight: '1px solid rgba(0,0,0,0.1)' }}>Time</div>
@@ -380,7 +437,7 @@ const AppointmentBookingFlow = ({ source = 'portal', kioskMode = false }) => {
               })}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="patient-summary-grid booking-two-col">
               <select className="input" value={form.clinician_name} onChange={(e) => setForm((p) => ({ ...p, clinician_name: e.target.value }))}>
                 <option value="">Any available personnel</option>
                 {visibleStaff.map((s) => <option key={s.name} value={s.name}>{s.name} ({s.role})</option>)}
@@ -400,11 +457,48 @@ const AppointmentBookingFlow = ({ source = 'portal', kioskMode = false }) => {
             </div>
           </div>
 
-          <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="patient-btn-row" style={{ alignItems: 'center' }}>
             <button className="btn" onClick={submit} disabled={saving}>{saving ? 'Submitting...' : 'Submit Request'}</button>
-            <span style={{ color: notice.includes('failed') ? 'var(--danger)' : 'var(--muted)' }}>{notice}</span>
           </div>
         </div>
+
+        {noticeOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 3200,
+              padding: 14,
+            }}
+            onClick={() => setNoticeOpen(false)}
+          >
+            <div
+              style={{
+                width: 'min(92vw, 520px)',
+                background: 'var(--panel)',
+                borderRadius: 12,
+                border: '1px solid rgba(0,0,0,0.08)',
+                boxShadow: '0 18px 38px rgba(0,0,0,0.18)',
+                padding: 18,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+                {notice.toLowerCase().includes('failed') || notice.toLowerCase().includes('unable') ? 'Booking Notice' : 'Appointment Notice'}
+              </div>
+              <div style={{ color: notice.toLowerCase().includes('failed') || notice.toLowerCase().includes('unable') ? 'var(--danger)' : 'var(--text)', lineHeight: 1.45 }}>
+                {notice}
+              </div>
+              <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn secondary" onClick={() => setNoticeOpen(false)}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     </main>
   );

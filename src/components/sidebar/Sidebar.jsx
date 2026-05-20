@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { translate } from '../../utils';
 import { useAuth } from '../../AuthContext.jsx';
@@ -230,7 +231,7 @@ const Sidebar = () => {
       </aside>
 
       {/* Inline Confirm Popup for Sign Out */}
-      {showConfirm && (
+      {showConfirm && createPortal((
         <div
           style={{
             position: 'fixed',
@@ -275,7 +276,7 @@ const Sidebar = () => {
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
     </>
   );
 };

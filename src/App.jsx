@@ -46,6 +46,7 @@ const ProtectedRoute = ({ isAuthenticated, user, allowedRoles = [], children }) 
 function AppShell() {
   const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('ehr_theme');
     if (saved) return saved;
@@ -56,6 +57,7 @@ function AppShell() {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const autoLogoutInProgressRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 980);
 
   useEffect(() => { document.title = 'TUP Clinic EHR'; }, []);
   useEffect(() => {
@@ -63,6 +65,17 @@ function AppShell() {
     localStorage.setItem('ehr_theme', theme);
   }, [theme]);
   useEffect(() => { localStorage.setItem('sidebarOpen', sidebarOpen); }, [sidebarOpen]);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 980);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(false);
+  }, [isMobile]);
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(false);
+  }, [location.pathname, isMobile]);
   useEffect(() => {
     window.applyTheme = (mode) => setTheme(mode);
     window.exportCsv = exportCsv;
@@ -114,6 +127,21 @@ function AppShell() {
         <div id="sidebar-container" className={`sidebar-container ${sidebarOpen ? '' : 'collapsed'}`}>
           {IS_USER_SURFACE ? <PatientSidebar /> : <Sidebar />}
         </div>
+      )}
+      {canAccessAuthenticatedHome && isRoleAllowedOnSurface && isMobile && (
+        <>
+          {!sidebarOpen && (
+            <button
+              type="button"
+              className="mobile-nav-toggle"
+              aria-label="Open navigation"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <span aria-hidden style={{ fontSize: 20, lineHeight: 1 }}>☰</span>
+            </button>
+          )}
+          {sidebarOpen && <button type="button" aria-label="Close navigation" className="mobile-sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+        </>
       )}
 
       <Routes>

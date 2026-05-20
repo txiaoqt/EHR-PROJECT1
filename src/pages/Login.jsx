@@ -33,9 +33,11 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+  const [vw, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1440));
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [msg, setMsg] = useState('');
+  const [msgOpen, setMsgOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [signupMode, setSignupMode] = useState(false);
   const [signupData, setSignupData] = useState({
@@ -270,6 +272,19 @@ const Login = () => {
     if (sessionMessage) setMsg(sessionMessage);
   }, [location]);
 
+  React.useEffect(() => {
+    if (msg) setMsgOpen(true);
+  }, [msg]);
+
+  React.useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const isMobile = vw <= 768;
+  const isTablet = vw > 768 && vw <= 1100;
+
   const authInputStyle = {
     background: 'rgba(255,255,255,0.94)',
     border: 'none',
@@ -311,12 +326,13 @@ const Login = () => {
           className="wrap"
           style={{
             display: 'flex',
-            gap: 56,
-            padding: '48px 80px',
-            alignItems: 'center',
+            gap: isMobile ? 16 : (isTablet ? 28 : 56),
+            padding: isMobile ? '16px 14px' : (isTablet ? '24px 28px' : '48px 80px'),
+            alignItems: isMobile ? 'stretch' : 'center',
             minHeight: '100vh',
             boxSizing: 'border-box',
             justifyContent: 'space-between',
+            flexDirection: isMobile ? 'column' : 'row',
           }}
         >
           {/* HERO (left) */}
@@ -324,9 +340,10 @@ const Login = () => {
             className="hero"
             aria-hidden="false"
             style={{
-              width: '58%',
-              padding: '18px 28px',
+              width: isMobile ? '100%' : (isTablet ? '52%' : '58%'),
+              padding: isMobile ? '8px 6px' : '18px 28px',
               boxSizing: 'border-box',
+              display: isMobile ? 'none' : 'block',
             }}
           >
             <div className="brand-row" style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 10 }}>
@@ -337,9 +354,22 @@ const Login = () => {
                 style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'contain', padding: 8 }}
               />
               <div>
+                {IS_USER_SURFACE ? (
+                  <h1 style={{
+                    margin: 0,
+                    fontSize: isTablet ? 26 : 34,
+                    lineHeight: 1.05,
+                    fontWeight: 900,
+                    fontFamily: `"Merriweather", serif`,
+                    color: '#111',
+                    letterSpacing: '-0.4px',
+                  }}>
+                    TUP Manila Clinic Online Patient Portal
+                  </h1>
+                ) : (
                 <h1 style={{
                   margin: 0,
-                  fontSize: 34,
+                  fontSize: isTablet ? 26 : 34,
                   lineHeight: 1.05,
                   fontWeight: 900,
                   fontFamily: `"Merriweather", serif`,
@@ -350,6 +380,7 @@ const Login = () => {
                   <br />
                   Philippines (TUP) Manila – Clinic
                 </h1>
+                )}
               </div>
             </div>
 
@@ -357,19 +388,23 @@ const Login = () => {
               marginTop: 22,
               color: 'rgba(68,68,68,1)',
               maxWidth: 760,
-              fontSize: 17,
+              fontSize: isTablet ? 15 : 17,
               lineHeight: 1.9,
               fontWeight: 400,
               opacity: 0.95,
               textAlign: 'justify',
               textJustify: 'inter-word'
             }}>
+              {IS_USER_SURFACE ? (
+                'The TUP Manila Clinic Online Patient Portal helps students, faculty, staff, and authorized TUP personnel access clinic services online. Users can book same-day or future appointments, view clinic visit history, and send non-emergency messages to doctors or clinic staff. The portal is built to make clinic coordination faster, easier, and more convenient for the whole TUP community.'
+              ) : (`
               TUP-M Electronic Health Records System is a streamlined, modern electronic health
               record platform designed to support efficient, accurate, and student-centered
               clinical care. It centralizes patient information, simplifies consultation
               documentation, improves workflow for clinicians, and ensures secure, role-based
               access to medical records — all tailored to the needs of the Technological
               University of the Philippines community.
+              `)}
             </p>
 
             <div
@@ -393,9 +428,9 @@ const Login = () => {
             className="login-wrap"
             aria-hidden="false"
             style={{
-              width: '40%',
+              width: isMobile ? '100%' : (isTablet ? '48%' : '40%'),
               display: 'flex',
-              justifyContent: 'flex-start',
+              justifyContent: isMobile ? 'center' : 'flex-start',
             }}
           >
             <div
@@ -403,11 +438,11 @@ const Login = () => {
               role="form"
               aria-labelledby="login-title"
               style={{
-                width: 460,
+                width: isMobile ? '100%' : (isTablet ? 420 : 460),
                 background: 'linear-gradient(180deg, #931b1b, #b92a2a)',
                 color: '#fff',
-                padding: 32,
-                borderRadius: 28,
+                padding: isMobile ? 20 : 32,
+                borderRadius: isMobile ? 20 : 28,
                 boxShadow: '0 20px 50px rgba(0,0,0,0.14)',
                 boxSizing: 'border-box',
               }}
@@ -415,7 +450,7 @@ const Login = () => {
               <h2 id="login-title" style={{
                 textAlign: 'center',
                 margin: '6px 0 14px 0',
-                fontSize: 28,
+                fontSize: isMobile ? 22 : 28,
                 fontWeight: 800,
                 fontFamily: `"Merriweather", serif`
               }}>{IS_USER_SURFACE ? (signupMode ? 'Create Account' : 'Patient Log In') : 'Staff Log In'}</h2>
@@ -540,11 +575,7 @@ const Login = () => {
                 </>
               )}
 
-              {msg && (
-                <div id="login-msg" style={{ marginTop: 12, color: 'var(--danger)' }}>
-                  {msg}
-                </div>
-              )}
+              
 
               <div className="footer-note" style={{ marginTop: 14, color: 'rgba(255,255,255,0.92)', textAlign: 'center', fontSize: 12.5 }}>
                 © Technological University of the Philippines
@@ -553,6 +584,23 @@ const Login = () => {
           </div>
         </div>
       </div>
+      {msgOpen && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3200, padding: 14 }}
+          onClick={() => setMsgOpen(false)}
+        >
+          <div
+            style={{ width: 'min(92vw, 520px)', background: '#fff', borderRadius: 12, border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 18px 38px rgba(0,0,0,0.18)', padding: 18 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: '#111' }}>Login Notice</div>
+            <div style={{ color: msg.toLowerCase().includes('failed') || msg.toLowerCase().includes('invalid') ? 'var(--danger)' : '#111', lineHeight: 1.45 }}>{msg}</div>
+            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn secondary" onClick={() => setMsgOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

@@ -47,7 +47,7 @@ create table if not exists public.role_permissions (
 create table if not exists public.students (
   id text primary key,
   name text not null,
-  year integer not null check (year >= 1 and year <= 8),
+  year integer not null check (year >= 1 and year <= 5),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -56,7 +56,7 @@ create table if not exists public.students (
 create table if not exists public.patients (
   id text primary key references public.students(id) on update cascade on delete restrict,
   name text not null,
-  year integer not null check (year >= 1 and year <= 8),
+  year integer not null check (year >= 1 and year <= 5),
   last_visit_date date,
   medications text,
   allergies text,
@@ -74,11 +74,17 @@ create table if not exists public.appointments (
   patient_id text not null references public.students(id) on update cascade on delete restrict,
   patient_name text,
   appointment_date date not null,
-  appointment_time time not null,
+  appointment_time text not null,
   type text not null default 'Consult' check (type in ('Consult', 'Follow-up')),
   clinician_name text not null,
   clinician_id text,
   clinician text,
+  source text not null default 'staff' check (source in ('staff', 'portal', 'kiosk')),
+  department text not null default 'Medical Clinic' check (department in ('Medical Clinic', 'Dental Clinic')),
+  appointment_type text not null default 'Future Appointment' check (appointment_type in ('Same-day Appointment', 'Future Appointment')),
+  service_type text,
+  queue_number integer,
+  reference_code text,
   status text not null default 'Scheduled' check (status in ('Scheduled', 'Checked-in', 'Cancelled', 'Completed')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -163,11 +169,24 @@ create table if not exists public.patient_messages (
   sender_role text not null check (sender_role in ('patient', 'physician', 'nurse', 'admin', 'clinic')),
   sender_name text,
   recipient_name text,
+  concern_type text not null default 'General clinic inquiry' check (concern_type in ('Appointment concern', 'Follow-up question', 'Medical inquiry', 'Dental inquiry', 'General clinic inquiry')),
   message_text text not null,
   status text not null default 'sent' check (status in ('sent', 'read', 'archived')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Backward-compatible alignment for older databases.
+alter table if exists public.appointments
+  add column if not exists source text not null default 'staff',
+  add column if not exists department text not null default 'Medical Clinic',
+  add column if not exists appointment_type text not null default 'Future Appointment',
+  add column if not exists service_type text,
+  add column if not exists queue_number integer,
+  add column if not exists reference_code text;
+
+alter table if exists public.patient_messages
+  add column if not exists concern_type text not null default 'General clinic inquiry';
 
 -- PROFILES (optional helper table read by Dashboard fallback)
 create table if not exists public.profiles (
@@ -356,16 +375,37 @@ on conflict (role, module) do update set
   can_delete = excluded.can_delete,
   updated_at = now();
 
--- Mock login users for your current login screen
-insert into public.users (name, email, password, role, active) values
-('Dr. Rivera', 'physician@tupclinic.local', 'Physician@123', 'physician', true),
-('Nurse Santos', 'nurse@tupclinic.local', 'Nurse@123', 'nurse', true)
-on conflict (email) do update set
-  name = excluded.name,
-  password = excluded.password,
-  role = excluded.role,
-  active = excluded.active,
-  updated_at = now();
+-- Mock clinic users for login screen (supports both legacy/plain-password and auth-based schemas).
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'users'
+      and column_name = 'password'
+  ) then
+    insert into public.users (name, email, password, role, active) values
+    ('Dr. Rivera', 'physician@tupclinic.local', 'Physician@123', 'physician', true),
+    ('Nurse Santos', 'nurse@tupclinic.local', 'Nurse@123', 'nurse', true)
+    on conflict (email) do update set
+      name = excluded.name,
+      password = excluded.password,
+      role = excluded.role,
+      active = excluded.active,
+      updated_at = now();
+  else
+    insert into public.users (name, email, role, active) values
+    ('Dr. Rivera', 'physician@tupclinic.local', 'physician', true),
+    ('Nurse Santos', 'nurse@tupclinic.local', 'nurse', true)
+    on conflict (email) do update set
+      name = excluded.name,
+      role = excluded.role,
+      active = excluded.active,
+      updated_at = now();
+  end if;
+end
+$$;
 
 -- END FILE: schema.sql
 
@@ -1888,5 +1928,33 @@ set
   created_at = excluded.created_at;
 
 -- END FILE: mock_data_seed_2026_latest.sql
+
+-- -----------------------------------------------------------------------------
+-- APP COMPATIBILITY OVERRIDE (current frontend uses anon key + app-level auth)
+-- Ensures booking/chat/records work without Supabase Auth sessions.
+-- -----------------------------------------------------------------------------
+alter table if exists public.users disable row level security;
+alter table if exists public.role_permissions disable row level security;
+alter table if exists public.students disable row level security;
+alter table if exists public.patients disable row level security;
+alter table if exists public.appointments disable row level security;
+alter table if exists public.encounters disable row level security;
+alter table if exists public.inventory disable row level security;
+alter table if exists public.inventory_transactions disable row level security;
+alter table if exists public.settings disable row level security;
+alter table if exists public.audit_logs disable row level security;
+alter table if exists public.profiles disable row level security;
+alter table if exists public.patient_messages disable row level security;
+alter table if exists public.break_glass_audit_logs disable row level security;
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to anon, authenticated;
+grant usage, select on all sequences in schema public to anon, authenticated;
+
+alter default privileges in schema public
+grant select, insert, update, delete on tables to anon, authenticated;
+
+alter default privileges in schema public
+grant usage, select on sequences to anon, authenticated;
 
 

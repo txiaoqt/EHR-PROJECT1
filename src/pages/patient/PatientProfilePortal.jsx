@@ -15,6 +15,7 @@ const PatientProfilePortal = () => {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [msgOpen, setMsgOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -34,6 +35,10 @@ const PatientProfilePortal = () => {
     load();
     return () => { mounted = false; };
   }, [user?.patient_id]);
+
+  useEffect(() => {
+    if (msg) setMsgOpen(true);
+  }, [msg]);
 
   const save = async () => {
     if (!user?.patient_id || !profile.name.trim()) return;
@@ -60,7 +65,7 @@ const PatientProfilePortal = () => {
 
   return (
     <main className="main">
-      <section className="page">
+      <section className="page patient-dashboard-page">
         <div className="card" style={{ marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Profile</h2>
           <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: 13 }}>
@@ -68,20 +73,20 @@ const PatientProfilePortal = () => {
           </div>
         </div>
 
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div className="card patient-profile-card">
+          <div className="patient-profile-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <h3 style={{ margin: 0 }}>Personal Details</h3>
             {!editing ? (
               <button className="btn" onClick={() => setEditing(true)}>Edit</button>
             ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="patient-profile-actions" style={{ display: 'flex', gap: 8 }}>
                 <button className="btn secondary" onClick={() => setEditing(false)}>Cancel</button>
                 <button className="btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
               </div>
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="patient-summary-grid patient-profile-grid">
             <div>
               <label>Name</label>
               <input className="input" value={profile.name} disabled={!editing} onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))} />
@@ -103,8 +108,24 @@ const PatientProfilePortal = () => {
               <textarea className="input" style={{ width: '100%', minHeight: 100 }} value={profile.notes} disabled={!editing} onChange={(e) => setProfile((p) => ({ ...p, notes: e.target.value }))} />
             </div>
           </div>
-          {msg && <div style={{ marginTop: 10, color: msg.includes('Unable') ? 'var(--danger)' : 'var(--muted)' }}>{msg}</div>}
         </div>
+        {msgOpen && (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3200, padding: 14 }}
+            onClick={() => setMsgOpen(false)}
+          >
+            <div
+              style={{ width: 'min(92vw, 520px)', background: 'var(--panel)', borderRadius: 12, border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 18px 38px rgba(0,0,0,0.18)', padding: 18 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Profile Notice</div>
+              <div style={{ color: msg.toLowerCase().includes('unable') ? 'var(--danger)' : 'var(--text)', lineHeight: 1.45 }}>{msg}</div>
+              <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn secondary" onClick={() => setMsgOpen(false)}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     </main>
   );
