@@ -11,6 +11,8 @@ import {
 import { useAuth } from '../AuthContext.jsx';                // auth context
 import { isPhysician } from '../accessControl.js';          // access control
 
+const normalizeTheme = (value) => (typeof value === 'string' && value.trim().toLowerCase() === 'dark' ? 'dark' : 'light');
+
 const Settings = () => {
   const location = useLocation();
   const { user: authUser } = useAuth();
@@ -33,13 +35,17 @@ const Settings = () => {
   useEffect(() => {
     // Initialize loading and ensure theme value exists in settings
     setLoading(false);
+    const theme = normalizeTheme(settings.theme);
     if (!settings.theme) {
       const saved = loadSettings().theme || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      setSettings(prev => ({ ...prev, theme: saved }));
+      setSettings(prev => ({ ...prev, theme: normalizeTheme(saved) }));
       // apply initial theme
       window.applyTheme && window.applyTheme(saved);
     } else {
-      window.applyTheme && window.applyTheme(settings.theme);
+      if (theme !== settings.theme) {
+        setSettings(prev => ({ ...prev, theme }));
+      }
+      window.applyTheme && window.applyTheme(theme);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -60,9 +66,9 @@ const Settings = () => {
 
   const revertSettings = () => {
     const saved = loadSettings();
-    setSettings(saved);
+    setSettings({ ...saved, theme: normalizeTheme(saved.theme) });
     // apply theme from saved settings
-    if (saved.theme) window.applyTheme && window.applyTheme(saved.theme);
+    if (saved.theme) window.applyTheme && window.applyTheme(normalizeTheme(saved.theme));
     setMessage('Reverted to saved settings.');
     setMessageType('info');
     setTimeout(() => setMessage(''), 2500);
@@ -409,7 +415,9 @@ const Settings = () => {
                   <button
                     className={`btn ${settings.theme !== 'light' ? 'secondary' : ''}`}
                     onClick={() => {
+                      const next = { ...settings, theme: 'light' };
                       handleSettingChange('theme', 'light');
+                      saveSettingsUtil(next);
                       window.applyTheme && window.applyTheme('light');
                     }}
                   >
@@ -420,7 +428,9 @@ const Settings = () => {
                   <button
                     className={`btn ${settings.theme !== 'dark' ? 'secondary' : ''}`}
                     onClick={() => {
+                      const next = { ...settings, theme: 'dark' };
                       handleSettingChange('theme', 'dark');
+                      saveSettingsUtil(next);
                       window.applyTheme && window.applyTheme('dark');
                     }}
                   >

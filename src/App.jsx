@@ -28,6 +28,10 @@ import { getClinicHoursMessage, hasRequiredRole, isWithinClinicHours } from './a
 const DEPLOY_SURFACE = (import.meta.env.VITE_DEPLOY_SURFACE || 'admin').toLowerCase();
 const IS_ADMIN_SURFACE = DEPLOY_SURFACE === 'admin';
 const IS_USER_SURFACE = DEPLOY_SURFACE === 'user';
+const normalizeTheme = (value) => {
+  const mode = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return mode === 'dark' ? 'dark' : 'light';
+};
 
 const getRoleHome = (role) => ((role || '').toLowerCase() === 'patient' ? '/patient/dashboard' : '/dashboard');
 const isPatientRole = (role) => (role || '').toLowerCase() === 'patient';
@@ -47,10 +51,33 @@ function AppShell() {
   const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [theme, setTheme] = useState(() => {
+  const resolveInitialTheme = () => {
+    try {
+      const settingsRaw = localStorage.getItem('clinic-settings');
+      if (settingsRaw) {
+        const parsed = JSON.parse(settingsRaw);
+        if (typeof parsed?.theme === 'string') return normalizeTheme(parsed.theme);
+      }
+    } catch (e) {
+      // ignore parse issues and fallback below
+    }
     const saved = localStorage.getItem('ehr_theme');
-    if (saved) return saved;
+    if (typeof saved === 'string') return normalizeTheme(saved);
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  };
+  const persistTheme = (mode) => {
+    const normalizedMode = normalizeTheme(mode);
+    localStorage.setItem('ehr_theme', normalizedMode);
+    try {
+      const settingsRaw = localStorage.getItem('clinic-settings');
+      const parsed = settingsRaw ? JSON.parse(settingsRaw) : {};
+      localStorage.setItem('clinic-settings', JSON.stringify({ ...parsed, theme: normalizedMode }));
+    } catch (e) {
+      localStorage.setItem('clinic-settings', JSON.stringify({ theme: normalizedMode }));
+    }
+  };
+  const [theme, setTheme] = useState(() => {
+    return resolveInitialTheme();
   });
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const saved = localStorage.getItem('sidebarOpen');
@@ -62,7 +89,7 @@ function AppShell() {
   useEffect(() => { document.title = 'TUP Clinic EHR'; }, []);
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('ehr_theme', theme);
+    persistTheme(theme);
   }, [theme]);
   useEffect(() => { localStorage.setItem('sidebarOpen', sidebarOpen); }, [sidebarOpen]);
   useEffect(() => {
@@ -81,8 +108,26 @@ function AppShell() {
     if (isMobile) setSidebarOpen(false);
   }, [location.pathname, isMobile]);
   useEffect(() => {
-    window.applyTheme = (mode) => setTheme(mode);
+    const onSettingsChanged = (ev) => {
+      setTheme(normalizeTheme(ev?.detail?.theme));
+    };
+    const onStorageChanged = (ev) => {
+      if (ev.key === 'ehr_theme' || ev.key === 'clinic-settings') {
+        setTheme(resolveInitialTheme());
+      }
+    };
+    window.applyTheme = (mode) => {
+      setTheme(normalizeTheme(mode));
+    };
+    window.addEventListener('settingsChanged', onSettingsChanged);
+    window.addEventListener('storage', onStorageChanged);
     window.exportCsv = exportCsv;
+    return () => {
+      window.removeEventListener('settingsChanged', onSettingsChanged);
+      window.removeEventListener('storage', onStorageChanged);
+      delete window.applyTheme;
+      delete window.exportCsv;
+    };
   }, []);
 
   useEffect(() => {

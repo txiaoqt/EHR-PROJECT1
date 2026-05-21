@@ -1,5 +1,9 @@
 // Utility functions
 import { supabase } from './supabaseClient.js';
+const normalizeTheme = (value) => {
+  const mode = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return mode === 'dark' ? 'dark' : 'light';
+};
 
 export const exportCsv = (filename = 'report.csv', csvData = "name,data\ndemo,1") => {
   const blob = new Blob([csvData], { type: 'text/csv' });
@@ -23,7 +27,9 @@ export const loadSettings = () => {
 
   try {
     const saved = localStorage.getItem('clinic-settings');
-    return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
+    if (!saved) return defaultSettings;
+    const parsed = JSON.parse(saved);
+    return { ...defaultSettings, ...parsed, theme: normalizeTheme(parsed?.theme) };
   } catch {
     return defaultSettings;
   }
@@ -31,9 +37,14 @@ export const loadSettings = () => {
 
 export const saveSettings = (settings) => {
   try {
-    localStorage.setItem('clinic-settings', JSON.stringify(settings));
+    const normalizedSettings = {
+      ...settings,
+      theme: normalizeTheme(settings?.theme)
+    };
+    localStorage.setItem('clinic-settings', JSON.stringify(normalizedSettings));
+    localStorage.setItem('ehr_theme', normalizedSettings.theme);
     // Trigger settings change event
-    window.dispatchEvent(new CustomEvent('settingsChanged', { detail: settings }));
+    window.dispatchEvent(new CustomEvent('settingsChanged', { detail: normalizedSettings }));
     return true;
   } catch {
     return false;
