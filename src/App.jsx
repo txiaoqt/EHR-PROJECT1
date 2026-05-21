@@ -71,7 +71,11 @@ function AppShell() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
   useEffect(() => {
-    if (isMobile) setSidebarOpen(false);
+    if (isMobile) {
+      setSidebarOpen(false);
+    } else {
+      setSidebarOpen(true);
+    }
   }, [isMobile]);
   useEffect(() => {
     if (isMobile) setSidebarOpen(false);

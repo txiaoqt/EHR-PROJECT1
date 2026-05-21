@@ -820,7 +820,7 @@ grant select, insert on public.break_glass_audit_logs to anon, authenticated;
 -- ============================================================================
 -- TUP Clinic EHR: Supabase Auth + RLS hardening schema
 -- Run this in Supabase SQL Editor AFTER your base schema has been created.
--- This migration removes plaintext-password app auth usage and enforces RLS.
+-- This migration includes Auth/RLS support but keeps app password login compatibility.
 -- -----------------------------------------------------------------------------
 -- 1) USERS TABLE ALIGNMENT FOR auth.users
 -- -----------------------------------------------------------------------------
@@ -900,8 +900,9 @@ begin
 end
 $$;
 
--- Remove plaintext password column if present.
-alter table if exists public.users drop column if exists password;
+-- Keep password column for current app login flow (nurse/physician/patient credential login).
+alter table if exists public.users
+  add column if not exists password text;
 
 -- -----------------------------------------------------------------------------
 -- 2) SYNC auth.users -> public.users (admin creates accounts in Supabase Auth)
